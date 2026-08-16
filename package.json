@@ -1,0 +1,63 @@
+{
+  "name": "workspace-scope",
+  "version": "0.1.0",
+  "description": "按工作区（工程）启停 Skill 与 MCP：控制新会话启动上下文（组合模式：默认全开 / 白名单 / 黑名单）",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**/*.js",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    },
+    "dynamic": {
+      "host": "src/index.ts",
+      "client": "src/client/dynamic.tsx",
+      "idPrefix": "wscp",
+      "purpose": "按工作区（工程）启停 Skill 与 MCP（plugin-dev-loop 热测）",
+      "outDir": "dist/dynamic"
+    }
+  },
+  "scripts": {
+    "build": "tsdown --config tsdown.config.ts",
+    "gen:dynamic": "node scripts/gen-dynamic.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "pnpm run typecheck && pnpm run build",
+    "prepare": "tsdown --config tsdown.config.ts",
+    "deploy": "pnpm run prepare && dsh plugin --profile web add ."
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@types/node": "^22.20.0",
+    "@types/react": "^18.3.1",
+    "react": "^18.2.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3"
+  },
+  "license": "MIT"
+}
