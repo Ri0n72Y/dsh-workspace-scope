@@ -38,6 +38,10 @@ packages/client/AGENTS.md):
 - One short English message per logical change.
 - `pnpm run check` and `pnpm test` must pass locally before pushing.
 
+## Licensing
+
+The project is MIT licensed. By contributing, you agree that your contribution is licensed under the project license (inbound = outbound). No CLA or DCO is required.
+
 ## Releasing
 
 1. Bump `version` in `package.json`.

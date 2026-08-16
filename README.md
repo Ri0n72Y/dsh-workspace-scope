@@ -59,6 +59,10 @@ flowchart LR
     K --> I
 ```
 
+## 贡献
+
+发现 bug 或有想法，直接开 issue；想动手改，先读 [CONTRIBUTING.md](CONTRIBUTING.md) 再提 PR。提交即表示同意按 MIT 许可授权。
+
 ## License
 
 MIT

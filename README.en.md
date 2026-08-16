@@ -59,6 +59,10 @@ flowchart LR
     K --> I
 ```
 
+## Contributing
+
+Open an issue for bugs or ideas. Before sending a pull request, read [CONTRIBUTING.md](CONTRIBUTING.md). By contributing you agree to the MIT license.
+
 ## License
 
 MIT
