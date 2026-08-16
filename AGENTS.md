@@ -1,42 +1,42 @@
 # AGENTS.md
 
-## 项目
+## Project
 
-workspace-scope 是 DeepSeek Harness（DSH）的 Cordis 插件：按工作区（工程）启停 Skill 与 MCP，控制新会话的启动上下文。静态部署形式是标准 DSH Bundle；`dsh.dynamic` 段只用于热测试。
+workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that turns Skills and MCP servers on and off per workspace, controlling the startup context of new sessions. The static deployment form is a standard DSH bundle; the `dsh.dynamic` section exists only for hot testing.
 
-## 常用命令（工作目录 workspace-scope/）
+## Common commands (workdir: workspace-scope/)
 
-- `pnpm run check`：typecheck + tsdown 双产物构建（lib/index.js + lib/client.js）
-- `pnpm run gen:dynamic`：从 src/client/index.tsx 生成 src/client/dynamic.tsx。改 client 源码后必须跑
-- `pnpm run deploy`：`pnpm run prepare` + `dsh plugin --profile web add .`（静态部署，需要用户授权）
-- 热测试循环：`dev_plugin_build`（compile-dynamic.mjs 编译 dist/dynamic）→ `dev_plugin_load`（新 Package + update）→ 浏览器验证。client 半部更新后通常还要再 `cordis_run`（run 模式重启）才在浏览器挂载
+- `pnpm run check`: typecheck + tsdown dual build (lib/index.js + lib/client.js)
+- `pnpm run gen:dynamic`: generates src/client/dynamic.tsx from src/client/index.tsx. Required after every client source change
+- `pnpm run deploy`: `pnpm run prepare` + `dsh plugin --profile web add .` (static deployment, needs user approval)
+- Hot test loop: `dev_plugin_build` (compile-dynamic.mjs builds dist/dynamic) then `dev_plugin_load` (new Package + update), then verify in the browser. After a client-half update, a `cordis_run` (run mode restart) is usually needed for the browser to mount it
 
-## 架构要点
+## Architecture
 
-- 双半部。Host（src/index.ts，Node）：pre-step 按工作区配置裁剪技能目录消息、`agent.ctx.tools.restrict` 裁剪 MCP 工具、`tools/pre-execute` 兜底拒绝被排除技能、overview/save 接口。Client（src/client/index.tsx，浏览器）：入口条与弹窗。
-- 双环境数据通道。动态 client 沙盒禁 import/fetch，走 `harness.handle`（Host 侧）+ `host.call`（Client 侧）；静态 bundle 走 webServer 路由 `/api/workspace-scope`（GET overview / POST save）。Client 的 callHost() 按 `typeof host !== 'undefined'` 分流。
-- dynamic.tsx 是脚本产物：头部 @ts-nocheck、`declare const React: any`、`apply(ctx: any)`，其余必须与 index.tsx 逐字一致。gen-dynamic.mjs 校验 marker，缺了就报错。
-- 入口座位：hero 用 conversation.input.right（紧凑 chip，blank===true 时渲染）；活跃会话用 conversation.composer.dock（环境带，blank!==true 时渲染）。互斥靠 useSessions 的 blank 判定。弹窗挂在 shell.overlay，模块级 modalOpen + modalListeners 让两个入口共享开关状态。
-- 配置：工作区根 .dsh-scope.json，`default` 键 {mode, skills[], mcps[]}。UI 保存恒写 whitelist（勾选即启用）；读取兼容 legacy default/blacklist。会话锁：appliedConfigs 按 agent.id 在首轮 pre-step 锁定，修改配置不影响已开始的会话。
-- 写配置必须显式 `sandboxPolicy.resolve({ session, mode: 'workspace-write' })`（UI 管理操作，不受会话只读模式影响）。
+- Two halves. Host (src/index.ts, Node): pre-step trims the skill catalog message per workspace config, `agent.ctx.tools.restrict` trims MCP tools, `tools/pre-execute` is the fallback that blocks excluded skills, plus the overview/save endpoints. Client (src/client/index.tsx, browser): entry bar and dialog.
+- Dual-environment data channel. The dynamic client sandbox forbids import and fetch, so it uses `harness.handle` (host side) with `host.call` (client side); the static bundle uses the webServer routes `/api/workspace-scope` (GET overview / POST save). The client's callHost() switches on `typeof host !== 'undefined'`.
+- dynamic.tsx is a script artifact: @ts-nocheck header, `declare const React: any`, `apply(ctx: any)`; everything else must match index.tsx byte for byte. gen-dynamic.mjs validates the markers and fails loudly if any is missing.
+- Entry seats: hero uses conversation.input.right (compact chip, rendered when blank===true); active sessions use conversation.composer.dock (band, rendered when blank!==true). The two are mutually exclusive via the useSessions blank flag. The dialog mounts in shell.overlay; module-level modalOpen plus modalListeners lets both entries share the open state.
+- Config: .dsh-scope.json in the workspace root, `default` key {mode, skills[], mcps[]}. The UI always saves `whitelist` (checked means enabled); reading accepts legacy default/blacklist. Session lock: appliedConfigs per agent.id locks at the first pre-step, so changing the config does not affect started conversations.
+- Writing the config must pass `sandboxPolicy.resolve({ session, mode: 'workspace-write' })` explicitly. Saving is a UI management operation, not bound by the session read-only mode.
 
-## UI 约定
+## UI conventions
 
-- 文案中文，代码注释英文。
-- 样式只用 `--dsw-*` 主题变量（零硬编码颜色），主题切换自动换肤。CSS 以字符串数组内联在 index.tsx 顶部（动态沙盒禁 bundler/import 的约束，不要改成 import css 文件）。
-- 类名前缀 `wsc-`。交互参考 harness 设置页的插件清单页：折叠行 + 详情、搜索框、分组标题可折叠（data-collapsed 控制箭头旋转）。
-- Switch 是自绘 `button[role=switch]`（harness 无现成组件）：轨道 28×16、滑块 12×12、启用色 `--dsw-alias-state-business-primary`、焦点环 `--dsw-alias-state-business-primary`。
+- Chinese copy in the UI, English comments in code.
+- Styles use only `--dsw-*` theme tokens (zero hardcoded colors), so a theme switch re-skins automatically. CSS lives as a string array at the top of index.tsx (the dynamic sandbox forbids bundler/import; do not switch to an imported CSS file).
+- Class prefix `wsc-`. Interactions follow the harness settings plugin-inventory page: collapsible rows with details, search box, collapsible group headings (data-collapsed rotates the arrow).
+- The Switch is a hand-rolled `button[role=switch]` (the harness has no reusable component): 28x16 track, 12x12 thumb, enabled color and focus ring from `--dsw-alias-state-business-primary`.
 
-## 已知取舍（动相关代码前先读）
+## Known trade-offs (read before touching related code)
 
-- tool-skill 的目录消息每轮重注入：digest 基于全量快照，过滤后每步日志多一条相同 catalog 事件，模型看到的目录内容正确。
-- `DSH_TOOLS_MODE=code` 下 MCP 部分静默失效（serverToolsMap 为空），`native`/`both` 正常。
-- 与 ../session-scope（旧动态版）不兼容，两者会互相覆盖 default 键，勿同时运行。
-- 弹窗没有完整 focus trap：仅打开时聚焦面板（tabIndex=-1）+ Esc 关闭 + aria-modal，键盘 Tab 可进入背景页面，接受此状态。
-- Playwright 后台标签页会冻结 CSS 过渡：transition 中的属性 computed 值会压过 inline/important，验证 transform/颜色过渡需临时 `transition:none`。
+- The skill catalog message is re-injected every round: tool-skill digests the full snapshot, so it re-injects the full catalog each round and this plugin trims it to the enabled set. The model sees the correct catalog; the session log gains one identical catalog event per step.
+- With `DSH_TOOLS_MODE=code` the MCP part silently does nothing (serverToolsMap is empty); `native` and `both` work.
+- Incompatible with ../session-scope (the old dynamic build): they overwrite each other's `default` key; never run both.
+- The dialog has no full focus trap: only initial focus on the panel (tabIndex=-1), Esc to close, and aria-modal. Tab can reach the page behind the mask; accepted.
+- Playwright background tabs freeze CSS transitions: a transitioning property's computed value overrides inline and important styles, so verifying transform or color transitions needs a temporary `transition:none`.
 
-## 产品边界（不做什么）
+## Product boundaries (what the plugin does not do)
 
-- 不安装、不增删、不编辑 MCP 或技能配置（MCP 配置以 cordis.patch.yml 为准）
-- 不做全局启停，不做全局查看面板
-- 不管理技能库
+- Does not install, add, remove, or edit MCP or skill configs (MCP config stays in cordis.patch.yml)
+- No global on/off, no global inventory panel
+- No skill library management
