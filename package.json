@@ -42,6 +42,7 @@
   "scripts": {
     "build": "tsdown --config tsdown.config.ts",
     "gen:dynamic": "node scripts/gen-dynamic.mjs",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "check": "pnpm run typecheck && pnpm run build",
     "prepare": "tsdown --config tsdown.config.ts",
@@ -53,11 +54,16 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.4",
     "@types/node": "^22.20.0",
     "@types/react": "^18.3.1",
+    "jsdom": "^30.0.1",
     "react": "^18.2.0",
+    "react-dom": "18.2.0",
     "tsdown": "^0.22.2",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
   },
   "license": "MIT"
 }

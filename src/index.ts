@@ -46,6 +46,33 @@ interface ScopeConfig {
 
 const DEFAULT_CONFIG: ScopeConfig = { mode: 'default', skills: [], mcps: [] }
 
+/**
+ * Parse a .dsh-scope.json document into a ScopeConfig.
+ *
+ * Pure function (no fs, no ctx) so the legacy/default/blacklist reading
+ * semantics are unit-testable. Unknown or malformed input degrades to
+ * DEFAULT_CONFIG; string-typed entries are kept, everything else dropped.
+ */
+export function parseScopeConfig(text: string | undefined): ScopeConfig {
+  if (text === undefined || text === '') return { ...DEFAULT_CONFIG }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text) as unknown
+  } catch {
+    return { ...DEFAULT_CONFIG }
+  }
+  const row = typeof parsed === 'object' && parsed !== null
+    ? (parsed as { default?: unknown }).default
+    : undefined
+  if (typeof row !== 'object' || row === null) return { ...DEFAULT_CONFIG }
+  const r = row as { mode?: unknown; skills?: unknown; mcps?: unknown }
+  return {
+    mode: r.mode === 'whitelist' || r.mode === 'blacklist' ? r.mode : 'default',
+    skills: Array.isArray(r.skills) ? r.skills.filter((x): x is string => typeof x === 'string') : [],
+    mcps: Array.isArray(r.mcps) ? r.mcps.filter((x): x is string => typeof x === 'string') : [],
+  }
+}
+
 // ── local structural types (keeps this package free of hard type deps) ──────
 
 interface McpSkillsRoute {
@@ -103,19 +130,7 @@ export function apply(ctx: Context): void {
     if (fs === undefined || cwd === undefined || cwd === '') return { ...DEFAULT_CONFIG }
     try {
       const target = await fs.resolve(`${cwd}/${CONFIG_FILE}`)
-      const text = await fs.readText(target)
-      const parsed = JSON.parse(text) as unknown
-      const row = typeof parsed === 'object' && parsed !== null
-        ? (parsed as { default?: unknown }).default
-        : undefined
-      if (typeof row === 'object' && row !== null) {
-        const r = row as { mode?: unknown; skills?: unknown; mcps?: unknown }
-        return {
-          mode: r.mode === 'whitelist' || r.mode === 'blacklist' ? r.mode : 'default',
-          skills: Array.isArray(r.skills) ? r.skills.filter((x): x is string => typeof x === 'string') : [],
-          mcps: Array.isArray(r.mcps) ? r.mcps.filter((x): x is string => typeof x === 'string') : [],
-        }
-      }
+      return parseScopeConfig(await fs.readText(target))
     } catch { /* missing or unreadable -> defaults */ }
     return { ...DEFAULT_CONFIG }
   }
