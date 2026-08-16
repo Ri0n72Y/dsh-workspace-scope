@@ -117,6 +117,21 @@ interface FsServiceLike {
   writeText(target: unknown, content: string, expected?: unknown, signal?: unknown, sandboxPolicy?: unknown): Promise<unknown>
 }
 
+/** Servers to deny for this session under the workspace config. */
+export function deniedServers(cfg: ScopeConfig, allServers: string[]): string[] {
+  if (cfg.mode === 'default') return []
+  if (cfg.mode === 'whitelist') return allServers.filter((s) => !cfg.mcps.includes(s))
+  return cfg.mcps.filter((s) => allServers.includes(s))
+}
+
+/** Skill names to keep in the injected catalog under the workspace config. */
+export function keptSkillNames(cfg: ScopeConfig, catalogNames: string[]): string[] | null {
+  // null = keep everything (default mode)
+  if (cfg.mode === 'default') return null
+  if (cfg.mode === 'whitelist') return catalogNames.filter((n) => cfg.skills.includes(n))
+  return catalogNames.filter((n) => !cfg.skills.includes(n))
+}
+
 export function apply(ctx: Context): void {
   const webServer = ctx.get('webServer') as McpSkillsWebServer | undefined
   if (webServer === undefined) {
@@ -187,21 +202,6 @@ export function apply(ctx: Context): void {
       }
     }
     return byServer
-  }
-
-  /** Servers to deny for this session under the workspace config. */
-  function deniedServers(cfg: ScopeConfig, allServers: string[]): string[] {
-    if (cfg.mode === 'default') return []
-    if (cfg.mode === 'whitelist') return allServers.filter((s) => !cfg.mcps.includes(s))
-    return cfg.mcps.filter((s) => allServers.includes(s))
-  }
-
-  /** Skill names to remove from the injected catalog under the workspace config. */
-  function keptSkillNames(cfg: ScopeConfig, catalogNames: string[]): string[] | null {
-    // null = keep everything (default mode)
-    if (cfg.mode === 'default') return null
-    if (cfg.mode === 'whitelist') return catalogNames.filter((n) => cfg.skills.includes(n))
-    return catalogNames.filter((n) => !cfg.skills.includes(n))
   }
 
   function escapeHtml(value: string): string {
