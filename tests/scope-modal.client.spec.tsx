@@ -288,6 +288,47 @@ describe('workspace-scope client', () => {
     })
   })
 
+  it('reads a legacy blacklist config as the inverted enablement', async () => {
+    const m = await mount((method: string) => {
+      if (method === 'overview') {
+        return Promise.resolve(makeOverview({
+          mcp: [],
+          config: { mode: 'blacklist', skills: ['skill-b'], mcps: [] },
+        }))
+      }
+      return Promise.resolve({ saved: true })
+    })
+    m.renderModal(sessions('s1', false))
+    m.renderEntries(sessions('s1', false))
+    openDialog()
+    await waitFor(() => {
+      const switches = screen.getAllByRole('switch')
+      expect(switches).toHaveLength(3) // no mcp in this config
+      // blacklist means checked = excluded: skill-b shows disabled, the rest enabled
+      expect(switches[0].getAttribute('aria-checked')).toBe('true') // skill-a
+      expect(switches[1].getAttribute('aria-checked')).toBe('false') // skill-b excluded
+      expect(switches[2].getAttribute('aria-checked')).toBe('true') // skill-c
+    })
+  })
+
+  it('clears the search term when the dialog reopens', async () => {
+    const m = await mount()
+    m.renderModal(sessions('s1', false))
+    m.renderEntries(sessions('s1', false))
+    openDialog()
+    await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(4))
+
+    fireEvent.change(screen.getByRole('searchbox', { name: '搜索技能或 MCP' }), { target: { value: 'skill-a' } })
+    await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(1))
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+
+    openDialog()
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
+    expect((screen.getByRole('searchbox', { name: '搜索技能或 MCP' }) as HTMLInputElement).value).toBe('')
+  })
+
   it('mounts the band only for active sessions and the chip only for the hero', async () => {
     const m = await mount()
     // hero (blank): exactly one entry button (the chip), no band hint
