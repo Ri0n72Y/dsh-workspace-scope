@@ -1,9 +1,9 @@
 /**
  * workspace-scope — Client half (TSX).
  *
- * 按工作区（工程）启停 Skill 与 MCP。入口两处（互不重叠）：
- *   - 活跃会话：composer 输入卡下方环境带（conversation.composer.dock）；
- *   - hero（新建会话）：输入卡内右侧工具行（conversation.input.right）。
+ * 按工作区（工程）启停 Skill 与 MCP。入口只在新建会话界面（hero）：
+ * 输入卡右侧工具行（conversation.input.right）的紧凑 chip；已进行的
+ * 对话不显示入口（配置在会话开始时锁定，修改只影响该工作区的新对话）。
  * 弹窗样式参考「设置 → 插件」页（搜索框 + 分组计数 + 卡片网格）。
  * Skill 与 MCP 全部条目始终展示，勾选即启用（白名单语义），
  * 提供 全部启用 / 全部禁用 快捷键。配置只影响该工作区的新对话。
@@ -51,18 +51,10 @@ function callHost(method: string, args: unknown): Promise<any> {
 // search field, section heading with count, card grid, status tag.
 
 const CSS = [
-  // Bar row inside the composer dock (active sessions).
-  '.wsc-bar-row{display:flex;align-items:center;gap:10px;min-width:0;width:100%}',
-  // Chip mirrors the agent-preset seat exactly.
-  '.wsc-seat{display:inline-flex;align-items:center;gap:4px;max-width:min(100%,240px);min-height:28px;padding:0 8px;border:none;border-radius:16px;background:transparent;color:var(--dsw-alias-label-primary);font-size:13px;line-height:20px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;font-family:inherit}',
-  ".wsc-seat:hover,.wsc-seat[aria-expanded='true']{background:var(--dsw-alias-interactive-bg-hover)}",
-  '.wsc-seat-icon{flex:none;color:var(--dsw-alias-label-primary)}',
-  '.wsc-chevron{flex:none;color:var(--dsw-alias-label-caption)}',
-  '.wsc-seat-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
-  '.wsc-bar-hint{color:var(--dsw-alias-label-caption);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
   // Compact chip inside the hero composer tool row.
   '.wsc-chip{display:inline-flex;align-items:center;gap:4px;min-height:28px;padding:0 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:inherit;font-size:12px;line-height:20px;font-family:inherit;cursor:pointer}',
   '.wsc-chip:hover{border-color:var(--dsw-alias-border-l2)}',
+  '.wsc-seat-icon{flex:none;color:var(--dsw-alias-label-primary)}',
   // Modal mirrors the settings shell: full-viewport mask + centered panel.
   '.wsc-overlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;pointer-events:none}',
   '.wsc-mask{position:absolute;inset:0;background:var(--dsw-alias-bg-mask-1);backdrop-filter:var(--dsw-mask-blur);pointer-events:auto}',
@@ -200,8 +192,6 @@ interface ScopeDraft {
 
 interface DockProps {
   useSessions?: (sel: (s: any) => any) => any
-  /** Which seat rendered this bar: 'composer' (active) or 'right' (hero tool row). */
-  seat?: string
 }
 
 // ── switch ──────────────────────────────────────────────────────────────────
@@ -227,11 +217,13 @@ function WscSwitch(props: { checked: boolean; onToggle: () => void; label: strin
   )
 }
 
-// ── bar (entry) ─────────────────────────────────────────────────────────────
+// ── entry (new-session screen only) ─────────────────────────────────────────
 
 function ScopeBar(props: DockProps): React.ReactElement | null {
   const [open, setModalFn] = useModalOpen()
-  const seat = props.seat ?? 'composer'
+  // The scope shapes the startup context of a new conversation, so the entry
+  // lives on the new-session screen only; ongoing conversations never show it
+  // (their config is already locked in).
   const blank = props.useSessions !== undefined
     ? props.useSessions((s: any) => {
       if (!s.current) return undefined
@@ -239,33 +231,14 @@ function ScopeBar(props: DockProps): React.ReactElement | null {
       return row ? !!row.blank : undefined
     })
     : false
-  if (seat === 'composer' && blank === true) return null
-  if (seat === 'right' && blank !== true) return null
-  if (seat === 'right') {
-    // Compact chip inside the hero composer tool row.
-    return (
-      <button type="button" className="wsc-chip" onClick={() => setModalFn(!open)} aria-expanded={open} title="按工作区配置新对话启用的 Skill 与 MCP">
-        <PresetIcon className="wsc-seat-icon" />
-        <span>工作区能力</span>
-        <ChevronIcon className="wsc-chevron" />
-      </button>
-    )
-  }
+  if (blank !== true) return null
+  // Compact chip inside the hero composer tool row.
   return (
-    <div className="wsc-bar-row">
-      <button
-        type="button"
-        className="wsc-seat"
-        onClick={() => setModalFn(!open)}
-        aria-expanded={open}
-        title="按工作区配置新对话启用的 Skill 与 MCP"
-      >
-        <PresetIcon className="wsc-seat-icon" />
-        <span className="wsc-seat-label">工作区能力</span>
-        <ChevronIcon className="wsc-chevron" />
-      </button>
-      <span className="wsc-bar-hint">按工作区启停 Skill / MCP，仅影响该工作区的新对话</span>
-    </div>
+    <button type="button" className="wsc-chip" onClick={() => setModalFn(!open)} aria-expanded={open} title="按工作区配置新对话启用的 Skill 与 MCP">
+      <PresetIcon className="wsc-seat-icon" />
+      <span>工作区能力</span>
+      <ChevronIcon className="wsc-chevron" />
+    </button>
   )
 }
 
@@ -350,11 +323,30 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
     setQuery('')
   }, [sessionId])
 
-  // Esc closes the modal (the backdrop click already covers pointer users).
+  // Esc closes the modal; Tab stays inside the dialog (focus trap).
   React.useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setModalFn(false)
+      if (event.key === 'Escape') {
+        setModalFn(false)
+        return
+      }
+      if (event.key !== 'Tab') return
+      const panel = panelRef.current
+      if (!panel) return
+      const focusables = [...panel.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')]
+      if (focusables.length === 0) return
+      const first = focusables[0]!
+      const last = focusables[focusables.length - 1]!
+      const active = document.activeElement
+      if (event.shiftKey && (active === first || !panel.contains(active))) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && (active === last || !panel.contains(active))) {
+        event.preventDefault()
+        first.focus()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -622,15 +614,12 @@ export function apply(ctx: Context): void {
   } | undefined
   if (slots === undefined) return
 
-  // Main seat: the band under the composer card (dsh's ambient readout row),
-  // active sessions only. Hero phase: compact chip in the composer tool row.
-  slots.inject('conversation.composer.dock', () => slots.register(
-    { name: 'conversation.composer.dock', id: 'workspace-scope', order: 30, label: () => '工作区能力' },
-    (props: unknown) => React.createElement(ScopeBar, { ...(props as object), seat: 'composer' }),
-  ))
+  // Entry: compact chip in the hero composer tool row (new-session screen).
+  // The scope shapes startup context, so there is no seat in ongoing
+  // conversations.
   slots.inject('conversation.input.right', () => slots.register(
     { name: 'conversation.input.right', id: 'workspace-scope', order: 30, label: () => '工作区能力' },
-    (props: unknown) => React.createElement(ScopeBar, { ...(props as object), seat: 'right' }),
+    (props: unknown) => React.createElement(ScopeBar, props as DockProps),
   ))
   slots.inject('shell.overlay', () => slots.register(
     { name: 'shell.overlay', id: 'workspace-scope-modal', order: 50 },

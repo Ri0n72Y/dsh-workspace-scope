@@ -8,10 +8,7 @@ The more skills and MCP servers you install, the larger the startup context of e
 
 ## Usage
 
-There are two entry points, in different places but opening the same dialog:
-
-- New session screen: the "Workspace scope" button in the tool row of the input card
-- Existing session: the "Workspace scope" bar below the input card
+The entry lives on the new-session screen: the "Workspace scope" button in the tool row of the input card. Ongoing conversations do not show it, since the scope is fixed once a conversation starts and only affects sessions created later.
 
 The dialog lists everything under two groups, Skills and MCP servers, and each group heading can be collapsed on its own:
 

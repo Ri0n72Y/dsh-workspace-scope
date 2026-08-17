@@ -43,7 +43,7 @@ function sessions(sessionId: string | undefined, blank: boolean): UseSessions {
 
 interface Mounted {
   hostCall: ReturnType<typeof vi.fn>
-  /** Render both entry seats (band + hero chip) as separate trees. */
+  /** Render the new-session-screen entry (hero chip). */
   renderEntries: (useSessions?: UseSessions) => void
   renderModal: (useSessions?: UseSessions) => void
   rerenderModal: (useSessions?: UseSessions) => void
@@ -86,8 +86,7 @@ async function mount(hostImpl?: (method: string, args: unknown) => Promise<unkno
 
   return {
     hostCall,
-    renderEntries: (useSessions) => {
-      render(seat('conversation.composer.dock')({ useSessions }) as ReactElement)
+    renderEntry: (useSessions) => {
       render(seat('conversation.input.right')({ useSessions }) as ReactElement)
     },
     renderModal: (useSessions) => {
@@ -112,8 +111,8 @@ afterEach(() => {
 describe('workspace-scope client', () => {
   it('opens the dialog and shows both groups with the saved enablement', async () => {
     const m = await mount()
-    m.renderModal(sessions('s1', false))
-    m.renderEntries(sessions('s1', false))
+    m.renderModal(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
 
     openDialog()
     await waitFor(() => expect(screen.getByRole('dialog', { name: '工作区能力' })).toBeTruthy())
@@ -131,8 +130,8 @@ describe('workspace-scope client', () => {
 
   it('filters entries through the search box and updates counts', async () => {
     const m = await mount()
-    m.renderModal(sessions('s1', false))
-    m.renderEntries(sessions('s1', false))
+    m.renderModal(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
     openDialog()
     await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(4))
 
@@ -151,8 +150,8 @@ describe('workspace-scope client', () => {
 
   it('expands and collapses a row to reveal details', async () => {
     const m = await mount()
-    m.renderModal(sessions('s1', false))
-    m.renderEntries(sessions('s1', false))
+    m.renderModal(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
     openDialog()
     await waitFor(() => expect(screen.getByText('skill-a')).toBeTruthy())
 
@@ -166,8 +165,8 @@ describe('workspace-scope client', () => {
 
   it('toggles a row with its switch and keeps the expanded state', async () => {
     const m = await mount()
-    m.renderModal(sessions('s1', false))
-    m.renderEntries(sessions('s1', false))
+    m.renderModal(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
     openDialog()
     await waitFor(() => expect(screen.getByText('skill-a')).toBeTruthy())
 
@@ -184,8 +183,8 @@ describe('workspace-scope client', () => {
 
   it('enable all / disable all flip every row and save sends the full set', async () => {
     const m = await mount()
-    m.renderModal(sessions('s1', false))
-    m.renderEntries(sessions('s1', false))
+    m.renderModal(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
     openDialog()
     await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(4))
 
@@ -212,8 +211,8 @@ describe('workspace-scope client', () => {
 
   it('reports save success and failure distinctly', async () => {
     const m = await mount()
-    m.renderModal(sessions('s1', false))
-    m.renderEntries(sessions('s1', false))
+    m.renderModal(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
     openDialog()
     await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(4))
 
@@ -231,8 +230,8 @@ describe('workspace-scope client', () => {
 
   it('closes via Escape and via the backdrop, focusing the dialog on open', async () => {
     const m = await mount()
-    m.renderModal(sessions('s1', false))
-    m.renderEntries(sessions('s1', false))
+    m.renderModal(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
     openDialog()
     await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
     expect(document.activeElement?.getAttribute('role')).toBe('dialog')
@@ -249,8 +248,8 @@ describe('workspace-scope client', () => {
 
   it('collapses a whole group from its heading', async () => {
     const m = await mount()
-    m.renderModal(sessions('s1', false))
-    m.renderEntries(sessions('s1', false))
+    m.renderModal(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
     openDialog()
     await waitFor(() => expect(screen.getByText('skill-a')).toBeTruthy())
 
@@ -276,12 +275,12 @@ describe('workspace-scope client', () => {
       }
       return Promise.resolve({ saved: true })
     })
-    m.renderModal(sessions('s1', false))
-    m.renderEntries(sessions('s1', false))
+    m.renderModal(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
     openDialog()
     await waitFor(() => expect(screen.getByText('skill-a')).toBeTruthy())
 
-    m.rerenderModal(sessions('s2', false))
+    m.rerenderModal(sessions('s2', true))
     await waitFor(() => {
       expect(screen.getByText('other-skill')).toBeTruthy()
       expect(screen.queryByText('skill-a')).toBeNull()
@@ -298,8 +297,8 @@ describe('workspace-scope client', () => {
       }
       return Promise.resolve({ saved: true })
     })
-    m.renderModal(sessions('s1', false))
-    m.renderEntries(sessions('s1', false))
+    m.renderModal(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
     openDialog()
     await waitFor(() => {
       const switches = screen.getAllByRole('switch')
@@ -313,8 +312,8 @@ describe('workspace-scope client', () => {
 
   it('clears the search term when the dialog reopens', async () => {
     const m = await mount()
-    m.renderModal(sessions('s1', false))
-    m.renderEntries(sessions('s1', false))
+    m.renderModal(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
     openDialog()
     await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(4))
 
@@ -329,20 +328,44 @@ describe('workspace-scope client', () => {
     expect((screen.getByRole('searchbox', { name: '搜索技能或 MCP' }) as HTMLInputElement).value).toBe('')
   })
 
-  it('mounts the band only for active sessions and the chip only for the hero', async () => {
+  it('traps Tab focus inside the dialog', async () => {
     const m = await mount()
-    // hero (blank): exactly one entry button (the chip), no band hint
     m.renderModal(sessions('s1', true))
-    m.renderEntries(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
+    openDialog()
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
+
+    const panel = screen.getByRole('dialog')
+    const focusables = [...panel.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])')]
+    expect(focusables.length).toBeGreaterThan(1)
+
+    // Tab on the last focusable wraps to the first
+    focusables[focusables.length - 1]!.focus()
+    fireEvent.keyDown(window, { key: 'Tab' })
+    expect(document.activeElement).toBe(focusables[0])
+
+    // Shift+Tab on the first wraps to the last
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(focusables[focusables.length - 1])
+
+    // Tab from outside the dialog (focus lost to the page) enters it
+    ;(document.activeElement as HTMLElement).blur()
+    fireEvent.keyDown(window, { key: 'Tab' })
+    expect(document.activeElement).toBe(focusables[0])
+  })
+
+  it('shows the entry only on the new-session screen', async () => {
+    const m = await mount()
+    // new-session screen (blank): the chip is present
+    m.renderModal(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
     expect(screen.getAllByRole('button', { name: '工作区能力' })).toHaveLength(1)
-    expect(screen.queryByText('按工作区启停 Skill / MCP，仅影响该工作区的新对话')).toBeNull()
 
     cleanup()
 
-    // active session: exactly one entry button (the band), hint present
+    // ongoing conversation: no entry at all
     m.renderModal(sessions('s1', false))
-    m.renderEntries(sessions('s1', false))
-    expect(screen.getAllByRole('button', { name: '工作区能力' })).toHaveLength(1)
-    expect(screen.getByText('按工作区启停 Skill / MCP，仅影响该工作区的新对话')).toBeTruthy()
+    m.renderEntry(sessions('s1', false))
+    expect(screen.queryByRole('button', { name: '工作区能力' })).toBeNull()
   })
 })

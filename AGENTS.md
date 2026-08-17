@@ -16,7 +16,7 @@ workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that turns Skills 
 - Two halves. Host (src/index.ts, Node): pre-step trims the skill catalog message per workspace config, `agent.ctx.tools.restrict` trims MCP tools, `tools/pre-execute` is the fallback that blocks excluded skills, plus the overview/save endpoints. Client (src/client/index.tsx, browser): entry bar and dialog.
 - Dual-environment data channel. The dynamic client sandbox forbids import and fetch, so it uses `harness.handle` (host side) with `host.call` (client side); the static bundle uses the webServer routes `/api/workspace-scope` (GET overview / POST save). The client's callHost() switches on `typeof host !== 'undefined'`.
 - dynamic.tsx is a script artifact: @ts-nocheck header, `declare const React: any`, `apply(ctx: any)`; everything else must match index.tsx byte for byte. gen-dynamic.mjs validates the markers and fails loudly if any is missing.
-- Entry seats: hero uses conversation.input.right (compact chip, rendered when blank===true); active sessions use conversation.composer.dock (band, rendered when blank!==true). The two are mutually exclusive via the useSessions blank flag. The dialog mounts in shell.overlay; module-level modalOpen plus modalListeners lets both entries share the open state.
+- Entry seat: the new-session screen only, conversation.input.right (compact chip, rendered when the current session is blank). Ongoing conversations never show the entry: the scope is locked in at conversation start, so it only shapes new sessions. The dialog mounts in shell.overlay; module-level modalOpen plus modalListeners shares the open state with the chip.
 - Config: .dsh-scope.json in the workspace root, `default` key {mode, skills[], mcps[]}. The UI always saves `whitelist` (checked means enabled); reading accepts legacy default/blacklist. Session lock: appliedConfigs per agent.id locks at the first pre-step, so changing the config does not affect started conversations.
 - Writing the config must pass `sandboxPolicy.resolve({ session, mode: 'workspace-write' })` explicitly. Saving is a UI management operation, not bound by the session read-only mode.
 
@@ -32,7 +32,6 @@ workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that turns Skills 
 - The skill catalog message is re-injected every round: tool-skill digests the full snapshot, so it re-injects the full catalog each round and this plugin trims it to the enabled set. The model sees the correct catalog; the session log gains one identical catalog event per step.
 - With `DSH_TOOLS_MODE=code` the MCP part silently does nothing (serverToolsMap is empty); `native` and `both` work.
 - Incompatible with ../session-scope (the old dynamic build): they overwrite each other's `default` key; never run both.
-- The dialog has no full focus trap: only initial focus on the panel (tabIndex=-1), Esc to close, and aria-modal. Tab can reach the page behind the mask; accepted.
 - Playwright background tabs freeze CSS transitions: a transitioning property's computed value overrides inline and important styles, so verifying transform or color transitions needs a temporary `transition:none`.
 
 ## Product boundaries (what the plugin does not do)
