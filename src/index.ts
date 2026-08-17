@@ -318,7 +318,11 @@ export function apply(ctx: Context): void {
   // External packages have no DSH event-name declaration merge; the runtime
   // event names are stable strings (agent/pre-step, tools/pre-execute,
   // agent/disposed).
-  const onEvent = ctx.on as unknown as (name: string, listener: (...args: never[]) => unknown) => unknown
+  const onEvent = ctx.on as unknown as (
+    name: string,
+    listener: (...args: never[]) => unknown,
+    options?: boolean | { prepend?: boolean },
+  ) => unknown
 
   // Drop restriction bookkeeping when an agent goes away.
   onEvent('agent/disposed', (agent: AgentLike) => {
@@ -348,20 +352,36 @@ export function apply(ctx: Context): void {
     }
     lastConfigs.set(payload.agent.id, cfg)
     await applyRestriction(payload.agent, cfg)
-    const messages = decision.messages ?? payload.messages
-    const catalogNames = (messages ?? [])
-      .flatMap((m) => {
-        const src = m.source as { kind?: unknown; entries?: unknown } | undefined
-        if (src?.kind !== 'skill-catalog' || !Array.isArray(src.entries)) return []
-        return (src.entries as Array<{ name?: unknown }>)
-          .filter((e): e is { name: string } => typeof e?.name === 'string')
-          .map((e) => e.name)
-      })
-    const keep = keptSkillNames(cfg, catalogNames)
-    const filtered = filterCatalogMessages(messages ?? [], keep)
-    if (filtered === (messages ?? [])) return decision
-    return { kind: 'enter', messages: filtered }
+    return decision
   })
+
+  // Final catalog trim, registered outermost (prepend). Cordis waterfalls run
+  // listeners outermost-first, so this listener is the LAST to see the batch:
+  // tool-skill, registered earlier, appends the full catalog at the end of
+  // the chain, and only a listener outside it can filter that message.
+  onEvent('agent/pre-step', async (
+    payload: { agent: AgentLike; messages: Array<Record<string, unknown>>; signal: AbortSignal },
+    next: () => Promise<{ kind: string; messages?: Array<Record<string, unknown>> }>,
+  ): Promise<{ kind: string; messages?: Array<Record<string, unknown>> }> => {
+    const decision = await next()
+    if (decision.kind === 'reject') return decision
+    payload.signal.throwIfAborted()
+    const cfg = lastConfigs.get(payload.agent.id)
+    if (cfg === undefined) return decision
+    const messages = decision.messages ?? payload.messages
+    if (messages === undefined) return decision
+    const catalogNames = messages.flatMap((m) => {
+      const src = m.source as { kind?: unknown; entries?: unknown } | undefined
+      if (src?.kind !== 'skill-catalog' || !Array.isArray(src.entries)) return []
+      return (src.entries as Array<{ name?: unknown }>)
+        .filter((e): e is { name: string } => typeof e?.name === 'string')
+        .map((e) => e.name)
+    })
+    const keep = keptSkillNames(cfg, catalogNames)
+    const filtered = filterCatalogMessages(messages, keep)
+    if (filtered === messages) return decision
+    return { kind: 'enter', messages: filtered }
+  }, { prepend: true } as never)
 
   // Belt-and-braces: deny the `skill` TOOL for skills the workspace config
   // excludes (the catalog filter already keeps them invisible). The user
