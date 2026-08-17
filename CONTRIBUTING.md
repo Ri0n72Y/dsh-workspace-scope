@@ -44,16 +44,11 @@ The project is MIT licensed. By contributing, you agree that your contribution i
 
 ## Releasing
 
-1. Bump `version` in `package.json`.
-2. Tag and push:
-
-   ```sh
-   git tag vX.Y.Z
-   git push origin vX.Y.Z
-   ```
-
-3. Create the release:
-
-   ```sh
-   gh release create vX.Y.Z --title "vX.Y.Z" --notes "..."
-   ```
+1. Put the release entries under the `## [Unreleased]` heading in
+   `CHANGELOG.md`.
+2. Run `node scripts/release.mjs <x.y.z>`: it validates a clean tree, stamps
+   the version into `package.json`, archives the Unreleased section, re-runs
+   the gate (`pnpm run check` + `pnpm test`), then commits and tags
+   `v<x.y.z>`. On gate failure it reverts the two written files.
+3. Push: `git push origin main --follow-tags`, then create the GitHub release:
+   `gh release create vX.Y.Z --title "vX.Y.Z" --notes "..."`
