@@ -17,7 +17,7 @@ The dialog lists everything under two groups, Skills and MCP servers, and each g
 - A search box filters the entries
 - Each row has a switch; on means enabled
 - Clicking the row expands details (description for skills, tool count for MCP servers)
-- Three buttons at the bottom: Enable all, Disable all, Save
+- Enable all / disable all quick buttons at the bottom; every change saves immediately
 
 Saving writes the config to `.dsh-scope.json` in the workspace root and only affects sessions created later in that workspace. Once a conversation starts, its config is fixed; changing it mid-conversation does not affect that conversation. Excluded skills can still be loaded ad hoc with the `/skill-name` gesture.
 

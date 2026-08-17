@@ -181,7 +181,7 @@ describe('workspace-scope client', () => {
     expect(screen.getAllByText('已禁用').length).toBeGreaterThan(0)
   })
 
-  it('enable all / disable all flip every row and save sends the full set', async () => {
+  it('enable all / disable all flip every row and autosave sends the full set', async () => {
     const m = await mount()
     m.renderModal(sessions('s1', true))
     m.renderEntry(sessions('s1', true))
@@ -192,39 +192,46 @@ describe('workspace-scope client', () => {
     await waitFor(() => {
       expect(screen.getAllByRole('switch').every((s) => s.getAttribute('aria-checked') === 'false')).toBe(true)
     })
+    // the change persisted without any explicit save button
+    await waitFor(() => {
+      const payload = m.hostCall.mock.calls.find(([method]) => method === 'save')?.[1] as
+        { mode: string; skills: string[]; mcps: string[] }
+      expect(payload).toBeTruthy()
+      expect(payload.mode).toBe('whitelist')
+      expect(payload.skills).toEqual([])
+      expect(payload.mcps).toEqual([])
+    })
 
     fireEvent.click(screen.getByRole('button', { name: '全部启用' }))
     await waitFor(() => {
       expect(screen.getAllByRole('switch').every((s) => s.getAttribute('aria-checked') === 'true')).toBe(true)
     })
-
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
     await waitFor(() => {
-      const saveCall = m.hostCall.mock.calls.find(([method]) => method === 'save')
-      expect(saveCall).toBeTruthy()
-      const payload = saveCall![1] as { mode: string; skills: string[]; mcps: string[] }
+      const calls = m.hostCall.mock.calls.filter(([method]) => method === 'save')
+      const payload = calls[calls.length - 1]![1] as { mode: string; skills: string[]; mcps: string[] }
       expect(payload.mode).toBe('whitelist')
       expect(payload.skills).toEqual(['skill-a', 'skill-b', 'skill-c'])
       expect(payload.mcps).toEqual(['playwright'])
     })
   })
 
-  it('reports save success and failure distinctly', async () => {
+  it('reports autosave success and failure distinctly', async () => {
     const m = await mount()
     m.renderModal(sessions('s1', true))
     m.renderEntry(sessions('s1', true))
     openDialog()
     await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(4))
 
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
-    await waitFor(() => expect(screen.getByText('已保存 ✓（该工作区的新对话生效）')).toBeTruthy())
+    // any change triggers the autosave; success shows the confirmation
+    fireEvent.click(screen.getAllByRole('switch')[0])
+    await waitFor(() => expect(screen.getByText('已保存 ✓（生效于该工作区的新对话）')).toBeTruthy())
 
     m.hostCall.mockImplementation((method: string) => {
       if (method === 'overview') return Promise.resolve(makeOverview())
       if (method === 'save') return Promise.resolve({ saved: false, reason: '权限不足' })
       return Promise.resolve({})
     })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.click(screen.getAllByRole('switch')[0])
     await waitFor(() => expect(screen.getByText('保存失败：权限不足')).toBeTruthy())
   })
 

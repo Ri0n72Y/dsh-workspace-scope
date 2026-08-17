@@ -8,7 +8,7 @@
  * 对话不显示入口（配置在会话开始时锁定，修改只影响该工作区的新对话）。
  * 弹窗样式参考「设置 → 插件」页（搜索框 + 分组计数 + 卡片网格）。
  * Skill 与 MCP 全部条目始终展示，勾选即启用（白名单语义），
- * 提供 全部启用 / 全部禁用 快捷键。配置只影响该工作区的新对话。
+ * 提供 全部启用 / 全部禁用 快捷按钮，改动即时保存。配置只影响新对话开场。
  *
  * 数据通道双环境：动态（plugin-dev-loop）client 沙箱禁止 fetch，走
  * host.call；静态 bundle 走 /api/workspace-scope 路由。
@@ -251,7 +251,6 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
   const [data, setData] = React.useState<OverviewData | null>(null)
   const [draft, setDraft] = React.useState<ScopeDraft | null>(null)
   const [query, setQuery] = React.useState('')
-  const [saving, setSaving] = React.useState(false)
   const [notice, setNotice] = React.useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [error, setError] = React.useState<string | null>(null)
   const [expanded, setExpanded] = React.useState<string | null>(null)
@@ -354,6 +353,35 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
+  // ── autosave: every draft change persists immediately ─────────────────────
+  // No debounce: the dynamic client sandbox has no timer globals, and a small
+  // local JSON write per change is cheap. Rapid changes each issue their own
+  // write; the last one wins on disk, and stale responses are dropped below.
+
+  const autosave = React.useCallback((next: ScopeDraft): void => {
+    if (sessionId === undefined) return
+    setNotice(null)
+    // Payload pins the session at change time; a response that arrives after
+    // the user switched sessions must not post its notice into the new one.
+    const requested = sessionId
+    callHost('save', {
+      sessionId: requested,
+      mode: 'whitelist',
+      skills: [...next.skills],
+      mcps: [...next.mcps],
+    })
+      .then((r: { saved?: boolean; reason?: string }) => {
+        if (requested !== sessionIdRef.current) return
+        setNotice(r.saved === true
+          ? { kind: 'ok', text: '已保存 ✓（生效于该工作区的新对话）' }
+          : { kind: 'err', text: `保存失败：${r.reason ?? '未知'}` })
+      })
+      .catch((err: unknown) => {
+        if (requested !== sessionIdRef.current) return
+        setNotice({ kind: 'err', text: `保存失败：${String((err && (err as Error).message) || err)}` })
+      })
+  }, [sessionId])
+
   // Give keyboard focus to the dialog when it opens, so Tab starts inside
   // the panel instead of the page behind the mask.
   const panelRef = React.useRef<HTMLDivElement | null>(null)
@@ -376,63 +404,39 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
     ? mcps
     : mcps.filter((m) => m.server.toLocaleLowerCase().includes(normalizedQuery))
 
+  const applyDraft = (next: ScopeDraft): void => {
+    if (draft === null) return
+    setDraft(next)
+    autosave(next)
+  }
+
   const toggleSkill = (name: string): void => {
-    setDraft((d) => {
-      if (d === null) return d
-      const s = new Set(d.skills)
-      if (s.has(name)) s.delete(name)
-      else s.add(name)
-      return { ...d, skills: s }
-    })
+    if (draft === null) return
+    const s = new Set(draft.skills)
+    if (s.has(name)) s.delete(name)
+    else s.add(name)
+    applyDraft({ ...draft, skills: s })
   }
   const toggleMcp = (server: string): void => {
-    setDraft((d) => {
-      if (d === null) return d
-      const s = new Set(d.mcps)
-      if (s.has(server)) s.delete(server)
-      else s.add(server)
-      return { ...d, mcps: s }
-    })
+    if (draft === null) return
+    const s = new Set(draft.mcps)
+    if (s.has(server)) s.delete(server)
+    else s.add(server)
+    applyDraft({ ...draft, mcps: s })
   }
   const allEnabled = (): void => {
-    setDraft((d) => d === null ? d : {
+    if (draft === null) return
+    applyDraft({
       // Union with the saved set: never drop whitelist entries that are
       // outside the (possibly global) overview snapshot.
-      ...d,
-      skills: new Set([...d.skills, ...skills.map((s) => s.name)]),
-      mcps: new Set([...d.mcps, ...mcps.map((m) => m.server)]),
+      ...draft,
+      skills: new Set([...draft.skills, ...skills.map((s) => s.name)]),
+      mcps: new Set([...draft.mcps, ...mcps.map((m) => m.server)]),
     })
   }
   const allDisabled = (): void => {
-    setDraft((d) => d === null ? d : { ...d, skills: new Set<string>(), mcps: new Set<string>() })
-  }
-
-  const save = (): void => {
-    if (draft === null || sessionId === undefined) return
-    setSaving(true)
-    setNotice(null)
-    // Payload pins the session at click time; a response that arrives after
-    // the user switched sessions must not post its notice into the new one
-    // (saving itself stays correct — the payload carries the old sessionId).
-    const requested = sessionId
-    callHost('save', {
-      sessionId,
-      mode: 'whitelist',
-      skills: [...draft.skills],
-      mcps: [...draft.mcps],
-    })
-      .then((r: { saved?: boolean; reason?: string }) => {
-        setSaving(false)
-        if (requested !== sessionIdRef.current) return
-        setNotice(r.saved === true
-          ? { kind: 'ok', text: '已保存 ✓（该工作区的新对话生效）' }
-          : { kind: 'err', text: `保存失败：${r.reason ?? '未知'}` })
-      })
-      .catch((err: unknown) => {
-        setSaving(false)
-        if (requested !== sessionIdRef.current) return
-        setNotice({ kind: 'err', text: `保存失败：${String((err && (err as Error).message) || err)}` })
-      })
+    if (draft === null) return
+    applyDraft({ ...draft, skills: new Set<string>(), mcps: new Set<string>() })
   }
 
   // Rows filtered out by search collapse visually; clearing the query
@@ -504,8 +508,7 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
     : (
       <div className="wsc-body">
         <p className="wsc-desc">
-          勾选该工作区新建对话默认启用的 Skill 与 MCP。只影响本工作区的新对话；
-          对话开始后不可更改，会话中可随时用 /&lt;技能名&gt; 临时加载被排除的技能。
+          仅对新对话开场生效：本配置决定新对话开始时注入的技能与 MCP，已进行的对话不受影响。不影响 /&lt;技能名&gt; 手势：对话中随时可用。改动即时保存。
         </p>
         <label className="wsc-search">
           <SearchIcon />
@@ -570,9 +573,6 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
         <div className="wsc-actions">
           <button type="button" className="wsc-btn" onClick={allEnabled}>全部启用</button>
           <button type="button" className="wsc-btn" onClick={allDisabled}>全部禁用</button>
-          <button type="button" className="wsc-btn wsc-save" onClick={save} disabled={saving || data === null || draft === null}>
-            {saving ? '保存中…' : '保存'}
-          </button>
         </div>
         {notice !== null
           ? <p className={notice.kind === 'ok' ? 'wsc-notice' : 'wsc-error'}>{notice.text}</p>
