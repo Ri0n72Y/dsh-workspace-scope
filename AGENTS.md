@@ -7,6 +7,7 @@ workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that turns Skills 
 ## Common commands (workdir: workspace-scope/)
 
 - `pnpm run check`: typecheck + tsdown dual build (lib/index.js + lib/client.js)
+- `pnpm test`: vitest run. `pnpm run test:coverage`: same, with a v8 coverage report (dynamic.tsx excluded)
 - `pnpm run gen:dynamic`: generates src/client/dynamic.tsx from src/client/index.tsx. Required after every client source change
 - `pnpm run deploy`: `pnpm run prepare` + `dsh plugin --profile web add .` (static deployment, needs user approval)
 - Hot test loop: `dev_plugin_build` (compile-dynamic.mjs builds dist/dynamic) then `dev_plugin_load` (new Package + update), then verify in the browser. After a client-half update, a `cordis_run` (run mode restart) is usually needed for the browser to mount it
