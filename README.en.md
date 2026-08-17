@@ -1,5 +1,7 @@
 # workspace-scope
 
+[![ci](https://github.com/Ri0n72Y/workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/workspace-scope/actions/workflows/ci.yml) [![license](https://img.shields.io/github/license/Ri0n72Y/workspace-scope)](https://github.com/Ri0n72Y/workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/workspace-scope)](https://github.com/Ri0n72Y/workspace-scope/releases)
+
 A DeepSeek Harness plugin that turns Skills and MCP servers on and off per workspace.
 
 The more skills and MCP servers you install, the larger the startup context of every new session. This plugin lets each project enable only what it needs, like VS Code with many language packs where each project opens only the ones it uses.
