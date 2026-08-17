@@ -51,9 +51,14 @@ function callHost(method: string, args: unknown): Promise<any> {
 // search field, section heading with count, card grid, status tag.
 
 const CSS = [
-  // Compact chip inside the hero composer tool row.
-  '.wsc-chip{display:inline-flex;align-items:center;gap:4px;min-height:28px;padding:0 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:inherit;font-size:12px;line-height:20px;font-family:inherit;cursor:pointer}',
-  '.wsc-chip:hover{border-color:var(--dsw-alias-border-l2)}',
+  // Compact chip inside the hero composer tool row. Chrome mirrors the
+  // sibling model-select trigger (ModelSelect.module.css .trigger): same
+  // height, pill radius, transparent background and focus ring, so the row
+  // reads as one set of controls.
+  '.wsc-chip{display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:220px;height:28px;padding:0 4px 0 8px;border:none;border-radius:24px;outline:none;background:transparent;color:var(--dsw-alias-label-secondary);font-size:13px;line-height:20px;font-weight:500;font-family:inherit;cursor:pointer}',
+  '.wsc-chip:hover{background:var(--dsw-alias-interactive-bg-hover)}',
+  '.wsc-chip:focus-visible{box-shadow:0 0 0 2px var(--dsw-alias-border-l3)}',
+  '.wsc-chip .wsc-chevron{flex:none;color:var(--dsw-alias-label-caption)}',
   '.wsc-seat-icon{flex:none;color:var(--dsw-alias-label-primary)}',
   // Modal mirrors the settings shell: full-viewport mask + centered panel.
   '.wsc-overlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;pointer-events:none}',
