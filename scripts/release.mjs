@@ -23,7 +23,7 @@ if (status !== '') {
   process.exit(1)
 }
 
-const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version: string }
+const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
 if (pkg.version === version) {
   console.error(`package.json is already at ${version}`)
   process.exit(1)
@@ -50,7 +50,7 @@ try {
   execSync('pnpm run check', { cwd: root, stdio: 'inherit' })
   execSync('pnpm test', { cwd: root, stdio: 'inherit' })
 } catch {
-  const rollback = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version: string }
+  const rollback = JSON.parse(readFileSync(pkgPath, 'utf8'))
   rollback.version = previousVersion
   writeFileSync(pkgPath, `${JSON.stringify(rollback, null, 2)}\n`, 'utf8')
   writeFileSync(changelogPath, changelog, 'utf8')
