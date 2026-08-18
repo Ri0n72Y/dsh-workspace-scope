@@ -1,6 +1,6 @@
-# workspace-scope
+# dsh-workspace-scope
 
-[![ci](https://github.com/Ri0n72Y/workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/workspace-scope/actions/workflows/ci.yml) [![license](https://img.shields.io/github/license/Ri0n72Y/workspace-scope)](https://github.com/Ri0n72Y/workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/workspace-scope)](https://github.com/Ri0n72Y/workspace-scope/releases)
+[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
 
 A DeepSeek Harness plugin that turns Skills and MCP servers on and off per workspace.
 

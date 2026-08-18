@@ -2,9 +2,9 @@
 
 ## Project
 
-workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that turns Skills and MCP servers on and off per workspace, controlling the startup context of new sessions. The static deployment form is a standard DSH bundle; the `dsh.dynamic` section exists only for hot testing.
+dsh-workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that turns Skills and MCP servers on and off per workspace, controlling the startup context of new sessions. The static deployment form is a standard DSH bundle; the `dsh.dynamic` section exists only for hot testing.
 
-## Common commands (workdir: workspace-scope/)
+## Common commands (workdir: dsh-workspace-scope/)
 
 - `pnpm run check`: typecheck + tsdown dual build (lib/index.js + lib/client.js)
 - `pnpm test`: vitest run. `pnpm run test:coverage`: same, with a v8 coverage report (dynamic.tsx excluded)

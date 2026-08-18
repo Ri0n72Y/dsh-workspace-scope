@@ -16,11 +16,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Ri0n72Y/workspace-scope.git"
+    "url": "git+https://github.com/Ri0n72Y/dsh-workspace-scope.git"
   },
-  "homepage": "https://github.com/Ri0n72Y/workspace-scope#readme",
+  "homepage": "https://github.com/Ri0n72Y/dsh-workspace-scope#readme",
   "bugs": {
-    "url": "https://github.com/Ri0n72Y/workspace-scope/issues"
+    "url": "https://github.com/Ri0n72Y/dsh-workspace-scope/issues"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
