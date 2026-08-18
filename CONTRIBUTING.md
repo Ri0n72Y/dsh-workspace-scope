@@ -44,16 +44,22 @@ The project is MIT licensed. By contributing, you agree that your contribution i
 
 ## Releasing
 
+Stable releases ship from the `release` branch. A push there triggers the
+`release` GitHub Actions workflow: gate → tag `v<package.version>` → npm
+publish (stable) → GitHub Release. Every step is idempotent, so re-pushing
+an already-published version is a safe no-op.
+
 1. Put the release entries under the `## [Unreleased]` heading in
    `CHANGELOG.md`.
-2. Run `node scripts/release.mjs <x.y.z>`: it validates a clean tree, stamps
-   the version into `package.json`, archives the Unreleased section, re-runs
-   the gate (`pnpm run check` + `pnpm test`), then commits and tags
+2. On the `release` branch, run `node scripts/release.mjs <x.y.z>`: it
+   validates a clean tree, stamps the version into `package.json`, archives
+   the Unreleased section, re-runs the gate, then commits and tags
    `v<x.y.z>`. On gate failure it reverts the two written files.
-3. Push: `git push origin main --follow-tags`. The `release` GitHub Actions
-   workflow then runs the gate again, verifies the tag matches the package
-   version, publishes to npm, and creates the GitHub Release. No manual npm
-   or release step needed.
+3. Push the release branch: `git push origin release`. The workflow performs
+   the npm publish and GitHub Release automatically.
+
+Development happens on `main`; sync the release branch with
+`git merge main` (or cherry-picks) when a release is ready.
 
 The npm publish uses the `NPM_TOKEN` repository secret: a granular access
 token scoped to the `dsh-workspace-scope` package with automation (2FA

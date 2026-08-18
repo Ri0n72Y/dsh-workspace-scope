@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file. The format is b
 ## [Unreleased]
 
 ### Added
-- `release` GitHub Actions workflow: pushing a `v*` tag runs the gate, verifies the tag matches the package version, publishes to npm (via the `NPM_TOKEN` secret), and creates the GitHub Release.
+- `release` GitHub Actions workflow: pushing the `release` branch gates, tags `v<version>`, publishes to npm (stable, via the `NPM_TOKEN` secret), and creates the GitHub Release. Idempotent, so re-pushing an already-published version is a no-op.
 
 ### Fixed
 - The trimmed catalog keeps the full `source.entries` on the rebuilt message (only the visible text is trimmed), so tool-skill's digest-based stability check stays satisfied and no catalog is re-injected on later steps. Previously every user message triggered a full catalog reload (tool-skill saw the trimmed entries, compared their digest against the full snapshot, and republished every step), wasting tokens per turn.

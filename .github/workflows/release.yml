@@ -1,16 +1,22 @@
 name: release
 
+# Pushing the `release` branch publishes a stable version: the workflow
+# gates, tags v<package.version>, publishes to npm, and creates the GitHub
+# Release. Every step is idempotent, so re-pushing an already-published
+# version is a safe no-op.
 on:
   push:
-    tags: ['v*']
+    branches: [release]
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # create the GitHub Release
+      contents: write # tag push + GitHub Release
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
           version: 11.7.0
@@ -24,16 +30,37 @@ jobs:
       # publishes (lib/ is gitignored, so it must exist before publishing).
       - run: pnpm run check
       - run: pnpm test
-      # The tag must name the package version: a mismatched tag is a mistake.
-      - name: tag matches package version
+      - name: resolve version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: tag the release
         run: |
-          node -e "const p=require('./package.json'); const tag=process.env.GITHUB_REF_NAME.replace(/^v/, ''); if (p.version !== tag) { console.error('tag ' + tag + ' does not match package version ' + p.version); process.exit(1) }"
-      - name: publish to npm
-        run: npm publish
+          VERSION="${{ steps.version.outputs.version }}"
+          if git rev-parse "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "tag v$VERSION already exists; skipping"
+          else
+            git tag "v$VERSION"
+            git push origin "v$VERSION"
+          fi
         env:
-          # Automation token (bypasses 2FA for CI) from repo secrets.
+          GH_TOKEN: ${{ github.token }}
+      - name: publish to npm
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if npm view "dsh-workspace-scope@$VERSION" version >/dev/null 2>&1; then
+            echo "dsh-workspace-scope@$VERSION already published; skipping"
+          else
+            npm publish
+          fi
+        env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: create GitHub release
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "See [CHANGELOG.md](CHANGELOG.md)."
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "release v$VERSION already exists; skipping"
+          else
+            gh release create "v$VERSION" --title "v$VERSION" --notes "See [CHANGELOG.md](CHANGELOG.md)."
+          fi
         env:
           GH_TOKEN: ${{ github.token }}
