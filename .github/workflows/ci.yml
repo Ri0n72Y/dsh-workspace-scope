@@ -7,7 +7,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -20,6 +24,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run check
       - run: pnpm test
+      # Coverage gate: below the configured thresholds this step fails.
+      - run: pnpm run test:coverage
       # The dynamic client artifact must never drift from the TSX source:
       # regenerating it must produce no diff.
       - name: dynamic.tsx stays in sync

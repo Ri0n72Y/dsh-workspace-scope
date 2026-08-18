@@ -10,6 +10,8 @@ All notable changes to this project are documented in this file. The format is b
 - A trimmed update catalog keeps its `update` marker, so downstream readers can still tell an initial catalog from a replacement.
 
 ### Added
+- Host behavior specs through the real apply(): webServer routes (overview/save/405/404), per-pre-step MCP restriction with the per-conversation lock, and the tools/pre-execute deny guard.
+- Coverage gate (`pnpm run test:coverage`, thresholds: 85% lines / 65% branches, enforced in CI) and a Windows CI matrix.
 - Waterfall regression specs for update-form trims, mid-chain reject/abort propagation, and first-step veto degradation (the trim stays a safe no-op when the inner config listener is skipped).
 - Every dialog change saves immediately (no save button left; enable all / disable all remain as quick actions).
 - The dialog copy states the effect boundaries explicitly: the scope applies at new-conversation start only, and the `/skill-name` gesture keeps working in any conversation.
