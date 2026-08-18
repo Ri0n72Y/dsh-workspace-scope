@@ -1,10 +1,27 @@
 {
-  "name": "workspace-scope",
+  "name": "dsh-workspace-scope",
   "version": "0.2.0",
-  "description": "按工作区（工程）启停 Skill 与 MCP：控制新会话启动上下文（组合模式：默认全开 / 白名单 / 黑名单）",
-  "private": true,
+  "description": "Per-workspace Skill and MCP enablement for DeepSeek Harness: each project controls which skills and MCP servers new sessions load.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "plugin",
+    "skill",
+    "mcp",
+    "workspace"
+  ],
   "type": "module",
   "packageManager": "pnpm@11.7.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ri0n72Y/workspace-scope.git"
+  },
+  "homepage": "https://github.com/Ri0n72Y/workspace-scope#readme",
+  "bugs": {
+    "url": "https://github.com/Ri0n72Y/workspace-scope/issues"
+  },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
   },
@@ -66,6 +83,5 @@
     "tsdown": "^0.22.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
-  },
-  "license": "MIT"
+  }
 }

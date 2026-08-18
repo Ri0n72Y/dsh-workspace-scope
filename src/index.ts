@@ -269,9 +269,11 @@ export function apply(ctx: Context): void {
         } else {
           changed = true
           const form = src.update === true ? 'update' : 'catalog'
-          // Rebuilt as a plain object: the field set ({id, role, content,
-          // source}) matches the Message shape and is never mutated later.
-          // Not deep-frozen on purpose, to avoid a dsh-llm dependency.
+          // The model sees the trimmed text only, but source.entries stay the
+          // FULL list: tool-skill's stability check (catalogHistory) digests
+          // the last model-visible catalog message and re-publishes whenever
+          // it differs from the full snapshot. Entries = full keeps that
+          // digest stable, so no catalog is re-injected on later steps.
           result.push({
             id: message.id,
             role: 'user',
@@ -279,7 +281,7 @@ export function apply(ctx: Context): void {
             source: {
               kind: 'skill-catalog',
               form,
-              entries: kept,
+              entries,
               // Keep the update marker so readers that distinguish an initial
               // catalog from a replacement stay correct after the rebuild.
               ...(src.update === true ? { update: true as const } : {}),

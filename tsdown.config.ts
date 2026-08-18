@@ -51,7 +51,9 @@ export default defineConfig([
     },
     outputOptions: {
       entryFileNames: 'client.js',
-      banner: 'window.__ModuleLoader__.load({ id: "workspace-scope", factory: (require) => {',
+      // The module-table id must equal the npm package name (the web shell
+      // resolves client bundles by package name).
+      banner: 'window.__ModuleLoader__.load({ id: "dsh-workspace-scope", factory: (require) => {',
       footer: 'return module.exports; } });',
       intro: 'var module = { exports: {} }; var exports = module.exports;',
     },

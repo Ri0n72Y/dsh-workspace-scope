@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Fixed
+- The trimmed catalog keeps the full `source.entries` on the rebuilt message (only the visible text is trimmed), so tool-skill's digest-based stability check stays satisfied and no catalog is re-injected on later steps. Previously every user message triggered a full catalog reload (tool-skill saw the trimmed entries, compared their digest against the full snapshot, and republished every step), wasting tokens per turn.
+
 ## [0.2.0] - 2026-08-18
 
 ### Fixed

@@ -95,9 +95,15 @@ describe('pre-step catalog trim vs the waterfall', () => {
 
     const catalogs = catalogMessages(result.messages)
     expect(catalogs).toHaveLength(1)
-    const entries = (catalogs[0]!.source as { entries: Array<{ name: string }> }).entries
-    expect(entries.map((e) => e.name)).toEqual(['keep-a', 'keep-c'])
-    expect(entries.map((e) => e.name)).not.toContain('drop-b')
+    const catalog = catalogs[0]!
+    const src = catalog.source as { entries: Array<{ name: string }> }
+    // The model-visible text is trimmed to the enabled set…
+    const text = (catalog.content as Array<{ text: string }>)[0]!.text
+    expect(text).toContain('keep-a')
+    expect(text).not.toContain('drop-b')
+    // …but source.entries stay FULL so tool-skill's digest-based stability
+    // check never re-publishes the catalog on later steps.
+    expect(src.entries.map((e) => e.name)).toEqual(['keep-a', 'drop-b', 'keep-c'])
   })
 
   it('trims an update-form catalog and keeps the update marker', async () => {
@@ -113,7 +119,11 @@ describe('pre-step catalog trim vs the waterfall', () => {
     const src = catalogs[0]!.source as { form: string; update?: boolean; entries: Array<{ name: string }> }
     expect(src.form).toBe('update')
     expect(src.update).toBe(true)
-    expect(src.entries.map((e) => e.name)).toEqual(['keep-a', 'keep-c'])
+    // entries stay full for digest stability; the visible text is trimmed
+    expect(src.entries.map((e) => e.name)).toEqual(['keep-a', 'drop-b', 'keep-c'])
+    const text = (catalogs[0]!.content as Array<{ text: string }>)[0]!.text
+    expect(text).toContain('keep-a')
+    expect(text).not.toContain('drop-b')
   })
 
   it('keeps the full catalog untouched in default mode', async () => {
