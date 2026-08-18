@@ -47,7 +47,8 @@ jobs:
       - name: publish to npm
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          if npm view "dsh-workspace-scope@$VERSION" version >/dev/null 2>&1; then
+          ALREADY="$(npm view "dsh-workspace-scope@$VERSION" version 2>/dev/null || true)"
+          if [ -n "$ALREADY" ]; then
             echo "dsh-workspace-scope@$VERSION already published; skipping"
           else
             npm publish
