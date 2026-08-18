@@ -14,12 +14,14 @@ const FULL_ENTRIES = [
   { name: 'keep-c', description: 'c' },
 ]
 
-function makeCtx() {
+/** ctx stub: fs present by default (whitelist config), pass { fs: false }
+ *  to simulate default-mode (no fs → DEFAULT_CONFIG). */
+function makeCtx(opts: { fs?: boolean } = {}) {
   const listeners: Array<{ fn: (...args: never[]) => unknown; prepend?: boolean }> = []
   const ctx = {
     get: (name: string): unknown => {
       if (name === 'webServer') return { register: () => () => {} }
-      if (name === 'fs') {
+      if (name === 'fs' && opts.fs !== false) {
         return {
           resolve: async (p: string): Promise<string> => p,
           readText: async (): Promise<string> => JSON.stringify({ default: WHITELIST }),
@@ -55,15 +57,27 @@ async function dispatch(
 }
 
 /** tool-skill-shaped listener: appends the full catalog at the end of the chain. */
-async function toolSkillLike(payload: Record<string, unknown>, next: () => unknown): Promise<unknown> {
+async function toolSkillLike(payload: Record<string, unknown>, next: () => unknown, form: 'catalog' | 'update' = 'catalog'): Promise<unknown> {
   const decision = (await next()) as { kind: string; messages?: Array<Record<string, unknown>> }
   if (decision.kind === 'reject') return decision
   const catalog = {
     role: 'user',
     content: [{ type: 'text', text: '<system-reminder>…' }],
-    source: { kind: 'skill-catalog', form: 'catalog', entries: FULL_ENTRIES },
+    source: { kind: 'skill-catalog', form, update: form === 'update' ? true : undefined, entries: FULL_ENTRIES },
   }
   return { kind: 'enter', messages: [...(decision.messages ?? []), catalog] }
+}
+
+function payloadOf(agentId: string): Record<string, unknown> {
+  return {
+    agent: { id: agentId, session: { header: { cwd: '/ws' } } },
+    messages: [],
+    signal: { throwIfAborted: () => {} },
+  }
+}
+
+function catalogMessages(messages: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  return messages.filter((m) => (m.source as { kind?: string })?.kind === 'skill-catalog')
 }
 
 describe('pre-step catalog trim vs the waterfall', () => {
@@ -77,53 +91,93 @@ describe('pre-step catalog trim vs the waterfall', () => {
     expect(listeners).toHaveLength(2) // trim (prepend) + config (push)
     const cbs = [listeners[0]!.fn, toolSkillLike, listeners[1]!.fn]
 
-    const payload = {
-      agent: { id: 'a1', session: { header: { cwd: '/ws' } } },
-      messages: [],
-      signal: { throwIfAborted: () => {} },
-    }
-    const result = (await dispatch(cbs, payload)) as { kind: string; messages: Array<Record<string, unknown>> }
+    const result = (await dispatch(cbs, payloadOf('a1'))) as { kind: string; messages: Array<Record<string, unknown>> }
 
-    const catalogs = result.messages.filter((m) =>
-      (m.source as { kind?: string })?.kind === 'skill-catalog')
+    const catalogs = catalogMessages(result.messages)
     expect(catalogs).toHaveLength(1)
     const entries = (catalogs[0]!.source as { entries: Array<{ name: string }> }).entries
     expect(entries.map((e) => e.name)).toEqual(['keep-a', 'keep-c'])
     expect(entries.map((e) => e.name)).not.toContain('drop-b')
   })
 
-  it('keeps the full catalog untouched in default mode', async () => {
+  it('trims an update-form catalog and keeps the update marker', async () => {
     const { ctx, listeners } = makeCtx()
-    // default mode: readConfig returns defaults (fs mock returns whitelist,
-    // so override by pointing at an empty store: fs undefined → default)
-    const ctx2 = {
-      ...ctx,
-      get: (name: string): unknown => {
-        if (name === 'webServer') return { register: () => () => {} }
-        return undefined // no fs → DEFAULT_CONFIG (mode default)
-      },
-    }
-    const listeners2: Array<{ fn: (...args: never[]) => unknown; prepend?: boolean }> = []
-    const ctxOn = ctx2 as { on: (...args: never[]) => unknown }
-    const realOn = ctxOn.on.bind(ctx2)
-    ctx2.on = ((name: string, fn: (...args: never[]) => unknown, options?: boolean | { prepend?: boolean }) => {
-      if (name !== 'agent/pre-step') return () => true
-      const prepend = options === true || (options !== undefined && typeof options === 'object' && options.prepend === true)
-      if (prepend) listeners2.unshift({ fn, prepend })
-      else listeners2.push({ fn })
-      return () => true
-    }) as never
-    apply(ctx2 as never)
+    apply(ctx as never)
 
-    const cbs = [listeners2[0]!.fn, toolSkillLike, listeners2[1]!.fn]
+    const updateLike = (p: Record<string, unknown>, n: () => unknown): Promise<unknown> => toolSkillLike(p, n, 'update')
+    const cbs = [listeners[0]!.fn, updateLike, listeners[1]!.fn]
+    const result = (await dispatch(cbs, payloadOf('a2'))) as { kind: string; messages: Array<Record<string, unknown>> }
+
+    const catalogs = catalogMessages(result.messages)
+    expect(catalogs).toHaveLength(1)
+    const src = catalogs[0]!.source as { form: string; update?: boolean; entries: Array<{ name: string }> }
+    expect(src.form).toBe('update')
+    expect(src.update).toBe(true)
+    expect(src.entries.map((e) => e.name)).toEqual(['keep-a', 'keep-c'])
+  })
+
+  it('keeps the full catalog untouched in default mode', async () => {
+    const { ctx, listeners } = makeCtx({ fs: false }) // no fs → DEFAULT_CONFIG (mode default)
+    apply(ctx as never)
+
+    const cbs = [listeners[0]!.fn, toolSkillLike, listeners[1]!.fn]
+    const result = (await dispatch(cbs, payloadOf('a3'))) as { kind: string; messages: Array<Record<string, unknown>> }
+
+    const catalogs = catalogMessages(result.messages)
+    expect(catalogs).toHaveLength(1)
+    const entries = (catalogs[0]!.source as { entries: Array<{ name: string }> }).entries
+    expect(entries).toHaveLength(FULL_ENTRIES.length)
+  })
+
+  it('passes a mid-chain reject through untouched (inner config listener skipped)', async () => {
+    const { ctx, listeners } = makeCtx()
+    apply(ctx as never)
+
+    // A vetoing listener sits between the trim and the config listeners and
+    // never calls next(): the inner config listener never runs, so the trim
+    // listener must forward the reject exactly as produced.
+    const veto = async (): Promise<unknown> => ({ kind: 'reject', reason: 'vetoed' })
+    const cbs = [listeners[0]!.fn, veto, listeners[1]!.fn]
+    const result = (await dispatch(cbs, payloadOf('a4'))) as { kind: string; reason?: string }
+
+    expect(result.kind).toBe('reject')
+    expect(result.reason).toBe('vetoed')
+  })
+
+  it('propagates an aborted signal as a failed proposal', async () => {
+    const { ctx, listeners } = makeCtx()
+    apply(ctx as never)
+
+    // The inner listener throws on abort after the chain below it resolves;
+    // tool-skill and the trim listener have no catch, so the whole waterfall
+    // rejects and agent-loop turns that into a failed proposal.
+    const cbs = [listeners[0]!.fn, toolSkillLike, listeners[1]!.fn]
     const payload = {
-      agent: { id: 'a2', session: { header: { cwd: '/ws' } } },
+      agent: { id: 'a5', session: { header: { cwd: '/ws' } } },
       messages: [],
-      signal: { throwIfAborted: () => {} },
+      signal: { throwIfAborted: (): never => { throw new Error('aborted') } },
     }
-    const result = (await dispatch(cbs, payload)) as { kind: string; messages: Array<Record<string, unknown>> }
-    const catalogs = result.messages.filter((m) =>
-      (m.source as { kind?: string })?.kind === 'skill-catalog')
+    await expect(dispatch(cbs, payload)).rejects.toThrow('aborted')
+  })
+
+  it('does not trim when a mid-chain enter-veto skips the config listener on the first step', async () => {
+    const { ctx, listeners } = makeCtx()
+    apply(ctx as never)
+
+    // An enter-vetoing listener between trim and config returns a decision
+    // without calling next(): on the very first step no config is locked, so
+    // the trim must pass the full catalog through untouched (no crash).
+    const fullCatalog = {
+      role: 'user',
+      content: [{ type: 'text', text: '<system-reminder>…' }],
+      source: { kind: 'skill-catalog', form: 'catalog', entries: FULL_ENTRIES },
+    }
+    const vetoEnter = async (): Promise<unknown> => ({ kind: 'enter', messages: [fullCatalog] })
+    const cbs = [listeners[0]!.fn, vetoEnter, listeners[1]!.fn]
+    const result = (await dispatch(cbs, payloadOf('a6'))) as { kind: string; messages: Array<Record<string, unknown>> }
+
+    expect(result.kind).toBe('enter')
+    const catalogs = catalogMessages(result.messages)
     expect(catalogs).toHaveLength(1)
     const entries = (catalogs[0]!.source as { entries: Array<{ name: string }> }).entries
     expect(entries).toHaveLength(FULL_ENTRIES.length)

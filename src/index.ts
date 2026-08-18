@@ -269,11 +269,21 @@ export function apply(ctx: Context): void {
         } else {
           changed = true
           const form = src.update === true ? 'update' : 'catalog'
+          // Rebuilt as a plain object: the field set ({id, role, content,
+          // source}) matches the Message shape and is never mutated later.
+          // Not deep-frozen on purpose, to avoid a dsh-llm dependency.
           result.push({
             id: message.id,
             role: 'user',
             content: [{ type: 'text', text: renderCatalogText(form, kept) }],
-            source: { kind: 'skill-catalog', form, entries: kept },
+            source: {
+              kind: 'skill-catalog',
+              form,
+              entries: kept,
+              // Keep the update marker so readers that distinguish an initial
+              // catalog from a replacement stay correct after the rebuild.
+              ...(src.update === true ? { update: true as const } : {}),
+            },
           })
         }
         continue
@@ -287,6 +297,9 @@ export function apply(ctx: Context): void {
   // Per-agent config lock: a conversation keeps the config it started with,
   // even when the workspace scope is edited later ("对话开始后不可更改").
   const appliedConfigs = new Map<string, ScopeConfig>()
+  // Most-recently-known config per agent/session: the synchronous
+  // tools/pre-execute guard can only read a cache, never await a file read.
+  const lastConfigs = new Map<string, ScopeConfig>()
 
   async function applyRestriction(agent: AgentLike, cfg: ScopeConfig): Promise<void> {
     const byServer = serverToolsMap()
@@ -366,7 +379,7 @@ export function apply(ctx: Context): void {
     const decision = await next()
     if (decision.kind === 'reject') return decision
     payload.signal.throwIfAborted()
-    const cfg = lastConfigs.get(payload.agent.id)
+    const cfg = appliedConfigs.get(payload.agent.id) ?? lastConfigs.get(payload.agent.id)
     if (cfg === undefined) return decision
     const messages = decision.messages ?? payload.messages
     if (messages === undefined) return decision
@@ -381,7 +394,7 @@ export function apply(ctx: Context): void {
     const filtered = filterCatalogMessages(messages, keep)
     if (filtered === messages) return decision
     return { kind: 'enter', messages: filtered }
-  }, { prepend: true } as never)
+  }, { prepend: true })
 
   // Belt-and-braces: deny the `skill` TOOL for skills the workspace config
   // excludes (the catalog filter already keeps them invisible). The user
@@ -400,9 +413,6 @@ export function apply(ctx: Context): void {
     }
     return next()
   })
-
-  // Cache of the last applied config per agent, for the synchronous guard above.
-  const lastConfigs = new Map<string, ScopeConfig>()
 
   // ── routes ────────────────────────────────────────────────────────────────
 

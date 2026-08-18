@@ -6,8 +6,11 @@ All notable changes to this project are documented in this file. The format is b
 
 ### Fixed
 - The skill catalog trim runs as an outermost (prepend) pre-step listener, so the full catalog tool-skill appends at the end of the waterfall is filtered too. Previously the trim ran before tool-skill's append and new conversations still saw the full catalog.
+- The trim listener reads the authoritative per-conversation lock (`appliedConfigs`) before the UI-shared cache, so a concurrent overview fetch cannot swap the config for a running conversation even for one step.
+- A trimmed update catalog keeps its `update` marker, so downstream readers can still tell an initial catalog from a replacement.
 
 ### Added
+- Waterfall regression specs for update-form trims, mid-chain reject/abort propagation, and first-step veto degradation (the trim stays a safe no-op when the inner config listener is skipped).
 - Every dialog change saves immediately (no save button left; enable all / disable all remain as quick actions).
 - The dialog copy states the effect boundaries explicitly: the scope applies at new-conversation start only, and the `/skill-name` gesture keeps working in any conversation.
 - The scope entry is hero-only: the chip shows on the new-session screen, and ongoing conversations show nothing (their config is locked at conversation start).

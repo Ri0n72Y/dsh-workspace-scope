@@ -30,7 +30,7 @@ workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that turns Skills 
 
 ## Known trade-offs (read before touching related code)
 
-- The skill catalog message is re-injected every round: tool-skill digests the full snapshot, so it re-injects the full catalog each round and this plugin trims it to the enabled set. The model sees the correct catalog; the session log gains one identical catalog event per step.
+- The skill catalog message is re-injected when the trim changes it: tool-skill digests the full snapshot and republishes on digest changes, and this plugin then trims the republished catalog to the enabled set. When nothing changes (default mode, or the whitelist already matches), the digest matches and no republish happens. The model sees the correct catalog either way; when a republish does occur, the session log gains one catalog event for that step.
 - With `DSH_TOOLS_MODE=code` the MCP part silently does nothing (serverToolsMap is empty); `native` and `both` work.
 - Incompatible with ../session-scope (the old dynamic build): they overwrite each other's `default` key; never run both.
 - Playwright background tabs freeze CSS transitions: a transitioning property's computed value overrides inline and important styles, so verifying transform or color transitions needs a temporary `transition:none`.
