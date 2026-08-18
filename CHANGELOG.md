@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-18
+
 ### Added
 - `release` GitHub Actions workflow: pushing the `release` branch gates, tags `v<version>`, publishes to npm (stable, via the `NPM_TOKEN` secret), and creates the GitHub Release. Idempotent, so re-pushing an already-published version is a no-op.
 

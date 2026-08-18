@@ -1,6 +1,6 @@
 {
   "name": "dsh-workspace-scope",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Per-workspace Skill and MCP enablement for DeepSeek Harness: each project controls which skills and MCP servers new sessions load.",
   "keywords": [
     "dsh",
