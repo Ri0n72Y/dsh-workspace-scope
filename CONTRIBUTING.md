@@ -50,5 +50,11 @@ The project is MIT licensed. By contributing, you agree that your contribution i
    the version into `package.json`, archives the Unreleased section, re-runs
    the gate (`pnpm run check` + `pnpm test`), then commits and tags
    `v<x.y.z>`. On gate failure it reverts the two written files.
-3. Push: `git push origin main --follow-tags`, then create the GitHub release:
-   `gh release create vX.Y.Z --title "vX.Y.Z" --notes "..."`
+3. Push: `git push origin main --follow-tags`. The `release` GitHub Actions
+   workflow then runs the gate again, verifies the tag matches the package
+   version, publishes to npm, and creates the GitHub Release. No manual npm
+   or release step needed.
+
+The npm publish uses the `NPM_TOKEN` repository secret: a granular access
+token scoped to the `dsh-workspace-scope` package with automation (2FA
+bypass) enabled, created at https://www.npmjs.com/settings/ri0n72y/tokens.

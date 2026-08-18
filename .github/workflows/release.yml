@@ -1,0 +1,39 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub Release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+      - run: pnpm install --frozen-lockfile
+      # check includes the tsdown build, which produces the lib/ files npm
+      # publishes (lib/ is gitignored, so it must exist before publishing).
+      - run: pnpm run check
+      - run: pnpm test
+      # The tag must name the package version: a mismatched tag is a mistake.
+      - name: tag matches package version
+        run: |
+          node -e "const p=require('./package.json'); const tag=process.env.GITHUB_REF_NAME.replace(/^v/, ''); if (p.version !== tag) { console.error('tag ' + tag + ' does not match package version ' + p.version); process.exit(1) }"
+      - name: publish to npm
+        run: npm publish
+        env:
+          # Automation token (bypasses 2FA for CI) from repo secrets.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: create GitHub release
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "See [CHANGELOG.md](CHANGELOG.md)."
+        env:
+          GH_TOKEN: ${{ github.token }}
