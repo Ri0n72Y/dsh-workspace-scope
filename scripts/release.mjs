@@ -61,4 +61,4 @@ try {
 execSync('git add package.json CHANGELOG.md', { cwd: root, stdio: 'inherit' })
 execSync(`git commit -m "chore: release v${version}"`, { cwd: root, stdio: 'inherit' })
 execSync(`git tag v${version}`, { cwd: root, stdio: 'inherit' })
-console.log(`released v${version}; push with: git push origin main --follow-tags`)
+console.log(`released v${version}; push with: git push origin main --follow-tags, then open a pull request from main into release`)

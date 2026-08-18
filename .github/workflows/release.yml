@@ -1,21 +1,24 @@
 name: release
 
-# Pushing the `release` branch publishes a stable version: the workflow
-# gates, tags v<package.version>, publishes to npm, and creates the GitHub
-# Release. Every step is idempotent, so re-pushing an already-published
+# Merging a pull request into `release` publishes a stable version: the
+# workflow gates, tags v<package.version>, publishes to npm, and creates the
+# GitHub Release. Every step is idempotent, so re-merging an already-published
 # version is a safe no-op.
 on:
-  push:
+  pull_request:
     branches: [release]
+    types: [closed]
 
 jobs:
   publish:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     permissions:
       contents: write # tag push + GitHub Release
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: release
           fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:

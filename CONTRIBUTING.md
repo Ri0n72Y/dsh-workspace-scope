@@ -44,22 +44,25 @@ The project is MIT licensed. By contributing, you agree that your contribution i
 
 ## Releasing
 
-Stable releases ship from the `release` branch. A push there triggers the
-`release` GitHub Actions workflow: gate → tag `v<package.version>` → npm
-publish (stable) → GitHub Release. Every step is idempotent, so re-pushing
-an already-published version is a safe no-op.
+Development happens on `main`, where CI runs the full test suite (typecheck,
+build, tests, coverage gate). Stable releases ship from the `release` branch:
+merging a pull request into `release` triggers the `release` GitHub Actions
+workflow — gate → tag `v<package.version>` → npm publish (stable) → GitHub
+Release. Every step is idempotent, so re-merging an already-published version
+is a safe no-op.
 
 1. Put the release entries under the `## [Unreleased]` heading in
-   `CHANGELOG.md`.
-2. On the `release` branch, run `node scripts/release.mjs <x.y.z>`: it
-   validates a clean tree, stamps the version into `package.json`, archives
-   the Unreleased section, re-runs the gate, then commits and tags
-   `v<x.y.z>`. On gate failure it reverts the two written files.
-3. Push the release branch: `git push origin release`. The workflow performs
-   the npm publish and GitHub Release automatically.
+   `CHANGELOG.md` and merge the change into `main`.
+2. On `main`, run `node scripts/release.mjs <x.y.z>`: it validates a clean
+   tree, stamps the version into `package.json`, archives the Unreleased
+   section, re-runs the gate, then commits and tags `v<x.y.z>`. On gate
+   failure it reverts the two written files.
+3. Push `main` (with the tag): `git push origin main --follow-tags`.
+4. Open a pull request from `main` into `release` and merge it. The workflow
+   performs the npm publish and GitHub Release automatically.
 
-Development happens on `main`; sync the release branch with
-`git merge main` (or cherry-picks) when a release is ready.
+`release` never receives direct commits: everything reaches it through a
+merged pull request from `main`.
 
 The npm publish uses the `NPM_TOKEN` repository secret: a granular access
 token scoped to the `dsh-workspace-scope` package with automation (2FA
