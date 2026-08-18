@@ -1,6 +1,6 @@
 {
   "name": "workspace-scope",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "按工作区（工程）启停 Skill 与 MCP：控制新会话启动上下文（组合模式：默认全开 / 白名单 / 黑名单）",
   "private": true,
   "type": "module",
