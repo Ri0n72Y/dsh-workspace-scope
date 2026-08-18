@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-18
+
 ### Fixed
 - npm metadata (repository / homepage / bugs) now points at the renamed `Ri0n72Y/dsh-workspace-scope` repository instead of the old `workspace-scope` URL.
 
