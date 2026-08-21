@@ -28,9 +28,6 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
-      # Do not set setup-node's registry-url here: it writes an _authToken
-      # placeholder into .npmrc, which can make npm use empty classic auth
-      # instead of starting the Trusted Publishing OIDC exchange.
       # Trusted Publishing requires npm >=11.5.1. Node 22 currently bundles
       # npm 10, so pin an OIDC-capable npm before the publish step.
       - run: npm install --global npm@11.19.0
@@ -60,7 +57,7 @@ jobs:
           if [ -n "$ALREADY" ]; then
             echo "dsh-workspace-scope@$VERSION already published; skipping"
           else
-            npm publish
+            node scripts/publish-trusted.mjs
           fi
       - name: create GitHub release
         run: |
