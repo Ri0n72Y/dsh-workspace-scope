@@ -633,15 +633,32 @@ export function apply(ctx: Context): void {
       res.end(JSON.stringify(body));
     };
     try {
-      const url = new URL(req.url ?? "/", "http://localhost");
-      const path = url.pathname;
+      // The dynamic sandbox has no URL/URLSearchParams globals, so split the
+      // request target manually: path before "?", query after it.
+      const raw = req.url ?? "/";
+      const qIndex = raw.indexOf("?");
+      const path = (qIndex === -1 ? raw : raw.slice(0, qIndex)) || "/";
+      const sessionIdParam = (): string => {
+        if (qIndex === -1) return "";
+        for (const pair of raw.slice(qIndex + 1).split("&")) {
+          if (pair === "") continue;
+          const eq = pair.indexOf("=");
+          const key = eq === -1 ? pair : pair.slice(0, eq);
+          if (key === "sessionId") {
+            const value = eq === -1 ? "" : pair.slice(eq + 1);
+            try {
+              return decodeURIComponent(value);
+            } catch {
+              return value;
+            }
+          }
+        }
+        return "";
+      };
       const known =
         path === `${ROUTE_PREFIX}/overview` || path === `${ROUTE_PREFIX}/save`;
       if (req.method === "GET" && path === `${ROUTE_PREFIX}/overview`) {
-        send(
-          200,
-          await overviewResult(url.searchParams.get("sessionId") ?? ""),
-        );
+        send(200, await overviewResult(sessionIdParam()));
       } else if (req.method === "POST" && path === `${ROUTE_PREFIX}/save`) {
         const body = JSON.parse(await readBody(req)) as {
           sessionId?: unknown;
