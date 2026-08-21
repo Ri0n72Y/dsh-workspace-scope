@@ -144,7 +144,7 @@ describe('workspace-scope host behavior', () => {
     expect(handler).not.toBeNull()
 
     const res = makeRes()
-    await handler!(makeReqGet('/api/workspace-scope/overview?sessionId=s1') as never, res as never)
+    await handler!(makeReqGet('/api/dsh-workspace-scope/overview?sessionId=s1') as never, res as never)
     expect(res.statusCode).toBe(200)
     const body = JSON.parse(res.body) as {
       skills: Array<{ name: string }>
@@ -170,7 +170,7 @@ describe('workspace-scope host behavior', () => {
 
     const res = makeRes()
     const body = JSON.stringify({ sessionId: 's1', mode: 'whitelist', skills: ['keep-skill'], mcps: ['playwright'] })
-    await handler(makeReqPost('/api/workspace-scope/save', body) as never, res as never)
+    await handler(makeReqPost('/api/dsh-workspace-scope/save', body) as never, res as never)
     expect(res.statusCode).toBe(200)
     expect(JSON.parse(res.body).saved).toBe(true)
     expect(env.state.written).toHaveLength(1)
@@ -179,11 +179,11 @@ describe('workspace-scope host behavior', () => {
     expect(written.default.mcps).toEqual(['playwright'])
 
     const bad1 = makeRes()
-    await handler(makeReqGet('/api/workspace-scope/save') as never, bad1 as never)
+    await handler(makeReqGet('/api/dsh-workspace-scope/save') as never, bad1 as never)
     expect(bad1.statusCode).toBe(405)
 
     const bad2 = makeRes()
-    await handler(makeReqGet('/api/workspace-scope/nope') as never, bad2 as never)
+    await handler(makeReqGet('/api/dsh-workspace-scope/nope') as never, bad2 as never)
     expect(bad2.statusCode).toBe(404)
   })
 

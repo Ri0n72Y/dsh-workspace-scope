@@ -15,8 +15,8 @@ const outPath = join(root, 'src/client/dynamic.tsx')
 let src = readFileSync(srcPath, 'utf8').replace(/\r\n/g, '\n')
 
 const substitutions = [
-  ["import React from 'react'", 'declare const React: any'],
-  ["import type { Context } from '@deepseek-ai/cordis'", ''],
+  ['import React from "react"', 'declare const React: any'],
+  ['import type { Context } from "@deepseek-ai/cordis"', ''],
   ['export function apply(ctx: Context): void {', 'export function apply(ctx: any): void {'],
 ]
 for (const [from, to] of substitutions) {
