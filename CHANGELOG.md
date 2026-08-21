@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-08-21
+
+### Fixed
+- Completed the `workspace-scope` → `dsh-workspace-scope` rename across the bundle metadata, host/client module references, and static API prefix, so the browser client and host now agree on `/api/dsh-workspace-scope`.
+- Updated the generated dynamic client substitutions and integration tests to follow the renamed API routes.
+- Replaced `URL` / `URLSearchParams`-dependent request parsing in the host route handler with sandbox-safe parsing, so overview/save requests work in DSH dynamic plugin environments where those globals are unavailable.
+
 ## [0.3.1] - 2026-08-18
 
 ### Fixed

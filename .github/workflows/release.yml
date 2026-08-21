@@ -15,19 +15,22 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # tag push + GitHub Release
+      id-token: write # npm Trusted Publishing (OIDC)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: release
           fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
           version: 11.7.0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: pnpm
-          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+      # Trusted Publishing requires npm >=11.5.1. Node 22 currently bundles
+      # npm 10, so pin an OIDC-capable npm before the publish step.
+      - run: npm install --global npm@11.19.0
       - run: pnpm install --frozen-lockfile
       # check includes the tsdown build, which produces the lib/ files npm
       # publishes (lib/ is gitignored, so it must exist before publishing).
@@ -54,10 +57,8 @@ jobs:
           if [ -n "$ALREADY" ]; then
             echo "dsh-workspace-scope@$VERSION already published; skipping"
           else
-            npm publish
+            node scripts/publish-trusted.mjs
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: create GitHub release
         run: |
           VERSION="${{ steps.version.outputs.version }}"

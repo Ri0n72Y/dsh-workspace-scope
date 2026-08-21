@@ -64,6 +64,9 @@ is a safe no-op.
 `release` never receives direct commits: everything reaches it through a
 merged pull request from `main`.
 
-The npm publish uses the `NPM_TOKEN` repository secret: a granular access
-token scoped to the `dsh-workspace-scope` package with automation (2FA
-bypass) enabled, created at https://www.npmjs.com/settings/ri0n72y/tokens.
+npm publishing uses Trusted Publishing (OIDC), with no long-lived npm token.
+The npm package's trusted publisher must point to the
+`Ri0n72Y/dsh-workspace-scope` GitHub repository and the `release.yml` workflow,
+with `npm publish` allowed. The workflow grants `id-token: write` and runs an
+OIDC-capable npm CLI before `npm publish`; npm then verifies the GitHub Actions
+identity and issues a short-lived publishing credential automatically.
