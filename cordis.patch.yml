@@ -1,4 +1,4 @@
-# workspace-scope — DSH Bundle patch.
+# dsh-workspace-scope — DSH Bundle patch.
 #
 # 按工作区（工程）启停 Skill 与 MCP：新会话按当前工作区配置裁剪技能目录
 # 与 MCP 工具，控制启动上下文大小。配置存于各工作区的 .dsh-scope.json，
@@ -7,5 +7,5 @@
 # Applied with:  dsh plugin --profile web add .
 
 - insert:
-    - id: workspace-scope
-      name: 'workspace-scope'
+    - id: dsh-workspace-scope
+      name: "dsh-workspace-scope"
