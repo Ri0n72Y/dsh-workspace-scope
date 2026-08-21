@@ -11,12 +11,13 @@
  * 提供 全部启用 / 全部禁用 快捷按钮，改动即时保存。配置只影响新对话开场。
  *
  * 数据通道双环境：动态（plugin-dev-loop）client 沙箱禁止 fetch，走
- * host.call；静态 bundle 走 /api/workspace-scope 路由。
+ * host.call；静态 bundle 走 /api/dsh-workspace-scope 路由。
  *
  * @module dsh-workspace-scope/client
  */
 
 declare const React: any;
+;
 
 export const name = "workspace-scope-client";
 
@@ -38,10 +39,10 @@ function callHost(method: string, args: unknown): Promise<any> {
   if (method === "overview") {
     const sessionId = (args as { sessionId?: string })?.sessionId ?? "";
     return fetch(
-      `/api/workspace-scope/overview?sessionId=${encodeURIComponent(sessionId)}`,
+      `/api/dsh-workspace-scope/overview?sessionId=${encodeURIComponent(sessionId)}`,
     ).then(handle);
   }
-  return fetch("/api/workspace-scope/save", {
+  return fetch("/api/dsh-workspace-scope/save", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(args),
