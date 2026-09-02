@@ -21,7 +21,7 @@ English version: [README.en.md](README.en.md)
 - 点行本身展开详情（技能显示描述，MCP 显示工具数量）
 - 底部有「全部启用」「全部禁用」快捷按钮，所有改动即时保存
 
-保存后配置写入当前工作区根目录的 `.dsh-scope.json`，只影响该工作区之后新建的会话。对话一旦开始，配置就固定下来，中途修改不会影响已开始的对话。被排除的技能仍可用 `/技能名` 手势在会话中临时加载。
+保存后配置写入当前工作区根目录的 `.dsh-scope.json`，只影响该工作区之后新建的会话。对话一旦开始，配置就固定下来，中途修改不会影响已开始的对话。被排除但原本允许用户调用的技能仍可用 `/技能名` 手势在会话中临时加载。
 
 ## 配置
 
@@ -50,14 +50,13 @@ flowchart LR
     A[用户打开弹窗] --> B[勾选启用的 Skill 与 MCP]
     B --> C[保存]
     C --> D[.dsh-scope.json<br/>工作区根]
-    E[新建会话] --> F[pre-step 读取配置]
+    E[新会话首个 pre-step] --> F[读取并锁定配置]
     D --> F
-    F --> G[技能目录消息<br/>裁剪为启用集]
-    F --> H[MCP 工具<br/>restrict 为启用服务器]
-    G --> I[模型上下文]
-    H --> I
-    J[工具执行前] --> K[兜底拒绝被排除技能<br/>/技能名 手势不受影响]
-    K --> I
+    F --> G[Agent Skill scope<br/>排除项 modelInvocable=false]
+    F --> H[Agent Tool scope<br/>tools.restrict MCP]
+    G --> I[DSH 原生 Skill catalog / skill tool]
+    H --> J[模型可见工具]
+    K[/技能名] --> L[保留原 userInvocable 策略]
 ```
 
 ## 贡献
