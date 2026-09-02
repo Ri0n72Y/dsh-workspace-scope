@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-02
+
+### Changed
+- Skill scoping now uses DSH's native per-agent `SkillRegistry` layers: excluded model-invocable skills are shadowed in the agent scope with `modelInvocable: false` while preserving their original user-invocation policy.
+- MCP scoping continues to use the native scoped `tools.restrict()` path, but Skill and MCP policy are now installed before downstream `agent/pre-step` listeners so the first accepted model step sees the scoped capabilities directly.
+- The workspace config is locked only after the first pre-step is accepted. A rejected or failed first pre-step rolls back the provisional scoped registrations and can retry with the latest workspace config.
+- Saving `.dsh-scope.json` no longer mutates a fresh agent immediately; the policy is installed once at conversation start.
+
+### Removed
+- Removed the custom `skill-catalog` message renderer/filter, the full-`source.entries` digest workaround, and the extra `tools/pre-execute` Skill deny guard.
+- Removed the catalog-waterfall compatibility test suite that existed only for the old interception path.
+
 ## [0.3.2] - 2026-08-21
 
 ### Fixed
