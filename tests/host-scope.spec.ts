@@ -1,38 +1,31 @@
-/**
- * Host-half scope math: which skills survive the catalog trim and which MCP
- * servers get denied, per config mode. Pure functions, direct unit coverage.
- */
+/** Host-half scope math: which Skill and MCP names are denied per mode. */
 import { describe, expect, it } from 'vitest'
-import { deniedServers, keptSkillNames } from '../src/index'
+import { deniedServers, deniedSkills } from '../src/index'
 
 const SKILLS = ['skill-a', 'skill-b', 'skill-c']
 const SERVERS = ['playwright', 'github', 'filesystem']
 
-describe('keptSkillNames', () => {
-  it('keeps everything in default mode', () => {
-    expect(keptSkillNames({ mode: 'default', skills: [], mcps: [] }, SKILLS)).toBeNull()
-    // even an explicit skills list is ignored in default mode
-    expect(keptSkillNames({ mode: 'default', skills: ['skill-a'], mcps: [] }, SKILLS)).toBeNull()
+describe('deniedSkills', () => {
+  it('denies nothing in default mode', () => {
+    expect(deniedSkills({ mode: 'default', skills: ['skill-a'], mcps: [] }, SKILLS)).toEqual([])
   })
 
-  it('filters to the whitelist in whitelist mode', () => {
-    const cfg = { mode: 'whitelist' as const, skills: ['skill-a', 'skill-c'], mcps: [] }
-    expect(keptSkillNames(cfg, SKILLS)).toEqual(['skill-a', 'skill-c'])
+  it('denies names outside the whitelist', () => {
+    expect(deniedSkills(
+      { mode: 'whitelist', skills: ['skill-a', 'skill-c'], mcps: [] },
+      SKILLS,
+    )).toEqual(['skill-b'])
   })
 
-  it('keeps only names that exist in the catalog (whitelist entries may be stale)', () => {
-    const cfg = { mode: 'whitelist' as const, skills: ['skill-a', 'gone'], mcps: [] }
-    expect(keptSkillNames(cfg, SKILLS)).toEqual(['skill-a'])
-  })
-
-  it('excludes the blacklist in blacklist mode', () => {
-    const cfg = { mode: 'blacklist' as const, skills: ['skill-b'], mcps: [] }
-    expect(keptSkillNames(cfg, SKILLS)).toEqual(['skill-a', 'skill-c'])
-  })
-
-  it('handles an empty catalog', () => {
-    expect(keptSkillNames({ mode: 'whitelist', skills: ['skill-a'], mcps: [] }, [])).toEqual([])
-    expect(keptSkillNames({ mode: 'blacklist', skills: [], mcps: [] }, [])).toEqual([])
+  it('ignores stale whitelist and blacklist entries', () => {
+    expect(deniedSkills(
+      { mode: 'whitelist', skills: ['skill-a', 'gone'], mcps: [] },
+      SKILLS,
+    )).toEqual(['skill-b', 'skill-c'])
+    expect(deniedSkills(
+      { mode: 'blacklist', skills: ['skill-b', 'gone'], mcps: [] },
+      SKILLS,
+    )).toEqual(['skill-b'])
   })
 })
 
@@ -41,18 +34,17 @@ describe('deniedServers', () => {
     expect(deniedServers({ mode: 'default', skills: [], mcps: [] }, SERVERS)).toEqual([])
   })
 
-  it('denies every installed server not on the whitelist', () => {
-    const cfg = { mode: 'whitelist' as const, skills: [], mcps: ['playwright'] }
-    expect(deniedServers(cfg, SERVERS)).toEqual(['github', 'filesystem'])
+  it('denies every installed server outside the whitelist', () => {
+    expect(deniedServers(
+      { mode: 'whitelist', skills: [], mcps: ['playwright'] },
+      SERVERS,
+    )).toEqual(['github', 'filesystem'])
   })
 
-  it('denies only the excluded servers in blacklist mode, limited to installed ones', () => {
-    const cfg = { mode: 'blacklist' as const, skills: [], mcps: ['playwright', 'not-installed'] }
-    expect(deniedServers(cfg, SERVERS)).toEqual(['playwright'])
-  })
-
-  it('denies nothing when the whitelist covers all installed servers', () => {
-    const cfg = { mode: 'whitelist' as const, skills: [], mcps: ['playwright', 'github', 'filesystem'] }
-    expect(deniedServers(cfg, SERVERS)).toEqual([])
+  it('denies only installed blacklist entries', () => {
+    expect(deniedServers(
+      { mode: 'blacklist', skills: [], mcps: ['playwright', 'not-installed'] },
+      SERVERS,
+    )).toEqual(['playwright'])
   })
 })

@@ -1,24 +1,40 @@
 // @vitest-environment node
-/**
- * Host behavior tests through the real apply(): the webServer routes
- * (overview/save/405/404), the MCP restriction applied per pre-step, and the
- * per-conversation config lock. Mocks cover only the boundaries: services,
- * fs, and the agent's tools.restrict.
- */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { apply } from '../src/index'
 
 const SERVERS = ['mcp__playwright__navigate', 'mcp__playwright__click', 'mcp__github__list']
 const SKILLS = [
-  { name: 'keep-skill', description: 'kept', invocation: { modelInvocable: true } },
-  { name: 'hidden-skill', description: 'not model invocable', invocation: { modelInvocable: false } },
+  {
+    name: 'keep-skill',
+    description: 'kept',
+    content: 'keep body',
+    source: 'custom',
+    provider: 'test',
+    invocation: { modelInvocable: true, userInvocable: true },
+  },
+  {
+    name: 'drop-skill',
+    description: 'dropped by workspace policy',
+    content: 'drop body',
+    source: 'custom',
+    provider: 'test',
+    invocation: { modelInvocable: true, userInvocable: true },
+  },
+  {
+    name: 'hidden-skill',
+    description: 'already hidden',
+    content: 'hidden body',
+    source: 'custom',
+    provider: 'test',
+    invocation: { modelInvocable: false, userInvocable: true },
+  },
 ]
 
 const WHITELIST_TEXT = JSON.stringify({
   default: { mode: 'whitelist', skills: ['keep-skill'], mcps: ['playwright'] },
 })
 const BLACKLIST_TEXT = JSON.stringify({
-  default: { mode: 'blacklist', skills: [], mcps: ['playwright'] },
+  default: { mode: 'blacklist', skills: ['keep-skill'], mcps: ['playwright'] },
 })
 
 function makeEnv(opts: { configText?: string } = {}) {
@@ -26,37 +42,57 @@ function makeEnv(opts: { configText?: string } = {}) {
     configText: opts.configText ?? WHITELIST_TEXT,
     written: [] as Array<{ target: string; content: string }>,
   }
-  const restrictCalls: Array<{ deny: string[] }> = []
-  const agentCtx = {
-    tools: {
-      restrict: (filter: { deny: string[] }): (() => void) => {
-        restrictCalls.push({ deny: [...filter.deny] })
-        return () => {}
+  const restrictCalls: Array<{ agentId: string; deny: string[]; disposed: boolean }> = []
+  const skillRegistrations: Array<{
+    agentId: string
+    skill: typeof SKILLS[number]
+    disposed: boolean
+  }> = []
+  const listeners: Array<{ fn: (...args: never[]) => unknown }> = []
+  let routeHandler: ((req: unknown, res: unknown) => Promise<void>) | null = null
+
+  const agent = (id: string) => ({
+    id,
+    session: { header: { cwd: '/ws' } },
+    ctx: {
+      tools: {
+        restrict: (filter: { deny: string[] }): (() => void) => {
+          const call = { agentId: id, deny: [...filter.deny], disposed: false }
+          restrictCalls.push(call)
+          return () => { call.disposed = true }
+        },
+      },
+      skills: {
+        register: (skill: typeof SKILLS[number]): (() => void) => {
+          const call = { agentId: id, skill, disposed: false }
+          skillRegistrations.push(call)
+          return () => { call.disposed = true }
+        },
       },
     },
-  }
-  const listeners: Array<{ fn: (...args: never[]) => unknown; prepend?: boolean }> = []
-  const preExecutes: Array<{ fn: (...args: never[]) => unknown }> = []
-  let routeHandler: ((req: unknown, res: unknown) => Promise<void>) | null = null
+  })
+
   const webServer = {
     register: (route: { handler: (req: unknown, res: unknown) => Promise<void> }): (() => void) => {
       routeHandler = route.handler
       return () => { routeHandler = null }
     },
   }
+
   const ctx = {
     get: (name: string): unknown => {
       if (name === 'webServer') return webServer
-      if (name === 'agents') {
-        return { get: (id: string) => ({ id, session: { header: { cwd: '/ws' } } }) }
-      }
+      if (name === 'agents') return { get: (id: string) => agent(id) }
       if (name === 'skills') {
-        return { snapshot: async () => ({ skills: SKILLS, complete: true }), get: async () => undefined }
+        return {
+          snapshot: async () => ({ skills: SKILLS, complete: true }),
+          get: async (skillName: string) => SKILLS.find((skill) => skill.name === skillName),
+        }
       }
-      if (name === 'tools') return { schemas: () => SERVERS.map((n) => ({ name: n })) }
+      if (name === 'tools') return { schemas: () => SERVERS.map((toolName) => ({ name: toolName })) }
       if (name === 'fs') {
         return {
-          resolve: async (p: string): Promise<string> => p,
+          resolve: async (path: string): Promise<string> => path,
           readText: async (): Promise<string> => state.configText,
           writeText: async (target: unknown, content: string): Promise<void> => {
             state.written.push({ target: String(target), content })
@@ -67,55 +103,48 @@ function makeEnv(opts: { configText?: string } = {}) {
       return undefined
     },
     effect: (cb: () => void): (() => void) => { cb(); return () => {} },
-    on: (name: string, fn: (...args: never[]) => unknown, options?: boolean | { prepend?: boolean }): (() => boolean) => {
-      if (name === 'tools/pre-execute') {
-        preExecutes.push({ fn })
-        return () => true
-      }
-      if (name !== 'agent/pre-step') return () => true
-      const prepend = options === true || (options !== undefined && typeof options === 'object' && options.prepend === true)
-      if (prepend) listeners.unshift({ fn, prepend })
-      else listeners.push({ fn })
+    on: (name: string, fn: (...args: never[]) => unknown): (() => boolean) => {
+      if (name === 'agent/pre-step') listeners.push({ fn })
       return () => true
     },
   }
-  return { ctx, listeners, preExecutes, state, restrictCalls, agentCtx, routeHandler: () => routeHandler }
+
+  return {
+    ctx,
+    agent,
+    listeners,
+    state,
+    restrictCalls,
+    skillRegistrations,
+    routeHandler: () => routeHandler,
+  }
 }
 
-async function dispatchPreStep(listeners: Array<{ fn: (...args: never[]) => unknown }>, payload: Record<string, unknown>): Promise<unknown> {
-  const cbs = listeners.map((l) => l.fn)
-  const inner = async (): Promise<unknown> => ({ kind: 'enter', messages: payload.messages })
+async function dispatchPreStep(
+  listeners: Array<{ fn: (...args: never[]) => unknown }>,
+  payload: Record<string, unknown>,
+  terminal: { kind: string } = { kind: 'enter' },
+): Promise<unknown> {
+  const cbs = listeners.map((listener) => listener.fn)
   const next = (): unknown => {
-    const cb = cbs.shift() ?? inner
-    return (cb as (...args: unknown[]) => unknown)(payload, next)
+    const cb = cbs.shift()
+    return cb === undefined ? terminal : (cb as (...args: unknown[]) => unknown)(payload, next)
   }
   return next()
 }
 
-function payloadOf(agentId: string, tools: unknown): Record<string, unknown> {
+function payloadOf(agent: ReturnType<ReturnType<typeof makeEnv>['agent']>): Record<string, unknown> {
   return {
-    agent: { id: agentId, session: { header: { cwd: '/ws' } }, ctx: { tools } },
+    agent,
     messages: [],
     signal: { throwIfAborted: () => {} },
   }
 }
 
-function makeRes(): {
-  statusCode: number
-  headers: Record<string, string>
-  body: string
-  setHeader: (k: string, v: string) => void
-  end: (body: string) => void
-} {
-  const res: {
-    statusCode: number
-    headers: Record<string, string>
-    body: string
-    setHeader: (k: string, v: string) => void
-    end: (body: string) => void
-  } = {
+function makeRes() {
+  const res = {
     statusCode: 0,
-    headers: {},
+    headers: {} as Record<string, string>,
     body: '',
     setHeader(k: string, v: string) { res.headers[k] = v },
     end(body: string) { res.body = body },
@@ -151,82 +180,90 @@ describe('workspace-scope host behavior', () => {
       mcp: Array<{ server: string; toolCount: number }>
       config: { mode: string; skills: string[]; mcps: string[] }
     }
-    // model-invocable filter applies; hidden-skill is dropped
-    expect(body.skills.map((s) => s.name)).toEqual(['keep-skill'])
-    // tools grouped per server, sorted by server name
+    expect(body.skills.map((skill) => skill.name)).toEqual(['keep-skill', 'drop-skill'])
     expect(body.mcp).toEqual([
       { server: 'github', toolCount: 1 },
       { server: 'playwright', toolCount: 2 },
     ])
-    expect(body.config.mode).toBe('whitelist')
-    expect(body.config.skills).toEqual(['keep-skill'])
-    expect(body.config.mcps).toEqual(['playwright'])
+    expect(body.config).toEqual({
+      mode: 'whitelist',
+      skills: ['keep-skill'],
+      mcps: ['playwright'],
+    })
   })
 
-  it('saves the posted config through fs and rejects wrong methods/paths', async () => {
+  it('saves config and keeps route errors bounded', async () => {
     const env = makeEnv()
     apply(env.ctx as never)
     const handler = env.routeHandler()!
 
     const res = makeRes()
-    const body = JSON.stringify({ sessionId: 's1', mode: 'whitelist', skills: ['keep-skill'], mcps: ['playwright'] })
-    await handler(makeReqPost('/api/dsh-workspace-scope/save', body) as never, res as never)
+    await handler(
+      makeReqPost(
+        '/api/dsh-workspace-scope/save',
+        JSON.stringify({ sessionId: 's1', mode: 'whitelist', skills: ['keep-skill'], mcps: ['playwright'] }),
+      ) as never,
+      res as never,
+    )
     expect(res.statusCode).toBe(200)
     expect(JSON.parse(res.body).saved).toBe(true)
     expect(env.state.written).toHaveLength(1)
-    const written = JSON.parse(env.state.written[0]!.content) as { default: { mode: string; mcps: string[] } }
-    expect(written.default.mode).toBe('whitelist')
-    expect(written.default.mcps).toEqual(['playwright'])
 
-    const bad1 = makeRes()
-    await handler(makeReqGet('/api/dsh-workspace-scope/save') as never, bad1 as never)
-    expect(bad1.statusCode).toBe(405)
+    const badMethod = makeRes()
+    await handler(makeReqGet('/api/dsh-workspace-scope/save') as never, badMethod as never)
+    expect(badMethod.statusCode).toBe(405)
 
-    const bad2 = makeRes()
-    await handler(makeReqGet('/api/dsh-workspace-scope/nope') as never, bad2 as never)
-    expect(bad2.statusCode).toBe(404)
+    const missing = makeRes()
+    await handler(makeReqGet('/api/dsh-workspace-scope/nope') as never, missing as never)
+    expect(missing.statusCode).toBe(404)
   })
 
-  it('restricts MCP tools per pre-step and locks the config per conversation', async () => {
+  it('uses native scoped Skill shadows and MCP restrict, locked per conversation', async () => {
     const env = makeEnv()
     apply(env.ctx as never)
-    const listeners = env.listeners
 
-    // First step: whitelist keeps playwright, so github's tool is denied.
-    await dispatchPreStep(listeners, payloadOf('a1', env.agentCtx.tools))
-    expect(env.restrictCalls).toHaveLength(1)
-    expect(env.restrictCalls[0]!.deny).toEqual(['mcp__github__list'])
+    const first = env.agent('a1')
+    await dispatchPreStep(env.listeners, payloadOf(first))
 
-    // Second step of the same conversation: config is locked, restriction is
-    // identical, so restrict() is not called again (same-deny skip).
+    expect(env.skillRegistrations).toHaveLength(1)
+    expect(env.skillRegistrations[0]!.agentId).toBe('a1')
+    expect(env.skillRegistrations[0]!.skill.name).toBe('drop-skill')
+    expect(env.skillRegistrations[0]!.skill.invocation).toEqual({
+      modelInvocable: false,
+      userInvocable: true,
+    })
+    expect(env.restrictCalls).toEqual([
+      { agentId: 'a1', deny: ['mcp__github__list'], disposed: false },
+    ])
+
     env.state.configText = BLACKLIST_TEXT
-    await dispatchPreStep(listeners, payloadOf('a1', env.agentCtx.tools))
+    await dispatchPreStep(env.listeners, payloadOf(first))
+    expect(env.skillRegistrations).toHaveLength(1)
     expect(env.restrictCalls).toHaveLength(1)
 
-    // A new conversation reads the new config: blacklist excludes playwright.
-    await dispatchPreStep(listeners, payloadOf('a2', env.agentCtx.tools))
-    expect(env.restrictCalls).toHaveLength(2)
-    expect(env.restrictCalls[1]!.deny).toEqual(['mcp__playwright__navigate', 'mcp__playwright__click'])
+    const second = env.agent('a2')
+    await dispatchPreStep(env.listeners, payloadOf(second))
+    expect(env.skillRegistrations).toHaveLength(2)
+    expect(env.skillRegistrations[1]!.skill.name).toBe('keep-skill')
+    expect(env.restrictCalls[1]!.deny).toEqual([
+      'mcp__playwright__navigate',
+      'mcp__playwright__click',
+    ])
   })
 
-  it('denies the skill tool for excluded skills via tools/pre-execute', async () => {
+  it('rolls back a provisional scope when the first pre-step is rejected', async () => {
     const env = makeEnv()
     apply(env.ctx as never)
-    // prime lastConfigs through a pre-step (the guard reads the cache)
-    await dispatchPreStep(env.listeners, payloadOf('a1', env.agentCtx.tools))
+    const first = env.agent('a1')
 
-    const guard = env.preExecutes[0]!.fn
-    const next = (): unknown => ({ kind: 'enter' })
-    const exec = {
-      name: 'skill',
-      agent: { id: 'a1' },
-      arguments: { name: 'keep-skill' },
-    }
-    // whitelist keeps keep-skill: passes through
-    expect(guard(exec, next)).toEqual(next())
-    // hidden-skill is not in the whitelist: denied
-    const denied = guard({ ...exec, arguments: { name: 'hidden-skill' } }, next) as { kind: string; reason: string }
-    expect(denied.kind).toBe('deny')
-    expect(denied.reason).toContain('excluded by the workspace scope config')
+    const rejected = await dispatchPreStep(env.listeners, payloadOf(first), { kind: 'reject' })
+    expect(rejected).toEqual({ kind: 'reject' })
+    expect(env.skillRegistrations[0]!.disposed).toBe(true)
+    expect(env.restrictCalls[0]!.disposed).toBe(true)
+
+    env.state.configText = BLACKLIST_TEXT
+    await dispatchPreStep(env.listeners, payloadOf(first))
+    expect(env.skillRegistrations).toHaveLength(2)
+    expect(env.skillRegistrations[1]!.skill.name).toBe('keep-skill')
   })
 })

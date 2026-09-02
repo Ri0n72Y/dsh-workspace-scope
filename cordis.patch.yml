@@ -1,7 +1,7 @@
 # dsh-workspace-scope — DSH Bundle patch.
 #
-# 按工作区（工程）启停 Skill 与 MCP：新会话按当前工作区配置裁剪技能目录
-# 与 MCP 工具，控制启动上下文大小。配置存于各工作区的 .dsh-scope.json，
+# 按工作区（工程）启停 Skill 与 MCP：新会话在 agent scope 中覆盖被排除 Skill
+# 的模型调用策略，并限制对应 MCP 工具。配置存于各工作区的 .dsh-scope.json，
 # 只影响该工作区的新建会话。
 #
 # Applied with:  dsh plugin --profile web add .
