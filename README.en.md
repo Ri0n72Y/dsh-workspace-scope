@@ -21,7 +21,7 @@ The dialog lists everything under two groups, Skills and MCP servers, and each g
 - Clicking the row expands details (description for skills, tool count for MCP servers)
 - Enable all / disable all quick buttons at the bottom; every change saves immediately
 
-Saving writes the config to `.dsh-scope.json` in the workspace root and only affects sessions created later in that workspace. Once a conversation starts, its config is fixed; changing it mid-conversation does not affect that conversation. Excluded skills can still be loaded ad hoc with the `/skill-name` gesture.
+Saving writes the config to `.dsh-scope.json` in the workspace root and only affects sessions created later in that workspace. Once a conversation starts, its config is fixed; changing it mid-conversation does not affect that conversation. Excluded skills that remain user-invocable can still be loaded ad hoc with the `/skill-name` gesture.
 
 ## Configuration
 
@@ -50,14 +50,13 @@ flowchart LR
     A[User opens the dialog] --> B[Toggles Skills and MCP servers]
     B --> C[Save]
     C --> D[.dsh-scope.json<br/>workspace root]
-    E[New session] --> F[pre-step reads the config]
+    E[First pre-step of a new session] --> F[Read and lock config]
     D --> F
-    F --> G[Skill catalog message<br/>trimmed to the enabled set]
-    F --> H[MCP tools<br/>restricted to enabled servers]
-    G --> I[Model context]
-    H --> I
-    J[Before tool execution] --> K[Fallback blocks excluded skills<br/>/skill-name gesture still works]
-    K --> I
+    F --> G[Agent Skill scope<br/>excluded: modelInvocable=false]
+    F --> H[Agent Tool scope<br/>tools.restrict MCP]
+    G --> I[Native DSH Skill catalog / skill tool]
+    H --> J[Model-visible tools]
+    K[/skill-name] --> L[Original userInvocable policy preserved]
 ```
 
 ## Contributing
