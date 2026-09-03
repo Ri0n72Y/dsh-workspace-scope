@@ -180,7 +180,11 @@ describe('workspace-scope host behavior', () => {
       mcp: Array<{ server: string; toolCount: number }>
       config: { mode: string; skills: string[]; mcps: string[] }
     }
-    expect(body.skills.map((skill) => skill.name)).toEqual(['keep-skill', 'drop-skill'])
+    expect(body.skills.map((skill) => skill.name)).toEqual([
+      'keep-skill',
+      'drop-skill',
+      'hidden-skill',
+    ])
     expect(body.mcp).toEqual([
       { server: 'github', toolCount: 1 },
       { server: 'playwright', toolCount: 2 },
