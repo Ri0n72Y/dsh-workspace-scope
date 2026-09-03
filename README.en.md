@@ -4,9 +4,11 @@
 
 ## The Plugin is under actively development, will be released frequently
 
-A DeepSeek Harness plugin that turns Skills and MCP servers on and off per workspace.
+A DeepSeek Harness plugin that turns Skills and Host-global MCP servers on and off per workspace.
 
-The more skills and MCP servers you install, the larger the startup context of every new session. This plugin lets each project enable only what it needs, like VS Code with many language packs where each project opens only the ones it uses.
+The more skills and global MCP servers you install, the larger the startup context of every new session. This plugin lets each project enable only what it needs, like VS Code with many language packs where each project opens only the ones it uses.
+
+MCP scope here explicitly means Host-global MCP tools inherited by an Agent. MCP servers registered inside an Agent or Preset scope are outside this plugin's management boundary.
 
 中文版：[README.md](README.md)
 
@@ -14,7 +16,7 @@ The more skills and MCP servers you install, the larger the startup context of e
 
 The entry lives on the new-session screen: the "Workspace scope" button in the tool row of the input card. Ongoing conversations do not show it, since the scope is fixed once a conversation starts and only affects sessions created later.
 
-The dialog lists everything under two groups, Skills and MCP servers, and each group heading can be collapsed on its own:
+The dialog lists all manageable entries under two groups, Skills and MCP servers, and each group heading can be collapsed on its own:
 
 - A search box filters the entries
 - Each row has a switch; on means enabled
@@ -41,19 +43,19 @@ The file is `.dsh-scope.json` in the workspace root:
 |---|---|---|
 | `mode` | `string` | Always saved as `whitelist`; reading accepts `default` (everything enabled) and `blacklist` (list means excluded) |
 | `skills` | `string[]` | Enabled skill names |
-| `mcps` | `string[]` | Enabled MCP server names |
+| `mcps` | `string[]` | Enabled Host-global MCP server names |
 
 ## Data flow
 
 ```mermaid
 flowchart LR
-    A[User opens the dialog] --> B[Toggles Skills and MCP servers]
+    A[User opens the dialog] --> B[Toggles Skills and global MCP servers]
     B --> C[Save]
     C --> D[.dsh-scope.json<br/>workspace root]
     E[First pre-step of a new session] --> F[Read and lock config]
     D --> F
     F --> G[Agent Skill scope<br/>excluded: modelInvocable=false]
-    F --> H[Agent Tool scope<br/>tools.restrict MCP]
+    F --> H[Agent Tool scope<br/>tools.restrict global MCP]
     G --> I[Native DSH Skill catalog / skill tool]
     H --> J[Model-visible tools]
     K[/skill-name] --> L[Original userInvocable policy preserved]
