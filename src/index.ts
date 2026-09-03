@@ -225,6 +225,8 @@ export function apply(ctx: Context): void {
     const tools = ctx.get("tools") as ToolsServiceLike | undefined;
     // No scope argument means the Host-global ToolRuntime view. Agent/Preset
     // scoped MCP registrations are intentionally outside this plugin's boundary.
+    // DSH does not currently expose stable MCP ownership metadata on ToolSchema,
+    // so server grouping remains limited to the conventional public-name prefix.
     for (const schema of tools?.schemas() ?? []) {
       const match = /^mcp__(.+?)__(.+)$/.exec(schema.name);
       if (match === null) continue;
@@ -309,7 +311,12 @@ export function apply(ctx: Context): void {
     }
   }
 
-  const activePolicies = new Map<string, () => void>();
+  interface ActivePolicy {
+    config: ScopeConfig;
+    dispose: () => void;
+  }
+
+  const activePolicies = new Map<string, ActivePolicy>();
   const onEvent = ctx.on as unknown as (
     name: string,
     listener: (...args: never[]) => unknown,
@@ -319,12 +326,12 @@ export function apply(ctx: Context): void {
   // The registrations live in agent scopes, so plugin unload/HMR must lift
   // them explicitly while those agents are still alive.
   ctx.effect(() => () => {
-    for (const dispose of activePolicies.values()) dispose();
+    for (const policy of activePolicies.values()) policy.dispose();
     activePolicies.clear();
   });
 
-  onEvent("agent/disposed", (agent: AgentLike) => {
-    activePolicies.get(agent.id)?.();
+  onEvent("agent/disposed", ({ agent }: { agent: AgentLike }) => {
+    activePolicies.get(agent.id)?.dispose();
     activePolicies.delete(agent.id);
   });
 
@@ -334,7 +341,22 @@ export function apply(ctx: Context): void {
       payload: { agent: AgentLike; signal: AbortSignal },
       next: () => Promise<{ kind: string; messages?: Array<Record<string, unknown>> }>,
     ): Promise<{ kind: string; messages?: Array<Record<string, unknown>> }> => {
-      if (activePolicies.has(payload.agent.id)) return next();
+      payload.signal.throwIfAborted();
+      const active = activePolicies.get(payload.agent.id);
+      if (active !== undefined) {
+        // The workspace config is locked, while DSH's Skill/MCP registries stay
+        // live. Rebuild the scoped policy from the current registries before
+        // every model step so hot-refresh/reconnect cannot bypass that lock.
+        active.dispose();
+        active.dispose = () => {};
+        active.dispose = await installCapabilityPolicy(
+          payload.agent,
+          active.config,
+          payload.signal,
+        );
+        return next();
+      }
+
       const cfg = await readConfig(payload.agent.session.header.cwd);
       payload.signal.throwIfAborted();
       const dispose = await installCapabilityPolicy(payload.agent, cfg, payload.signal);
@@ -344,7 +366,7 @@ export function apply(ctx: Context): void {
           dispose();
           return decision;
         }
-        activePolicies.set(payload.agent.id, dispose);
+        activePolicies.set(payload.agent.id, { config: cfg, dispose });
         return decision;
       } catch (err) {
         dispose();
