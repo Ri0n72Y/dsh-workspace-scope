@@ -1,9 +1,9 @@
 /**
  * dsh-workspace-scope — Host half.
  *
- * Workspace config is locked when an Agent session starts. Host-global MCP
- * restrictions are installed before the first prompt assembly; Skill shadows
- * are refreshed at pre-step, immediately before DSH's skill catalog listener.
+ * Workspace config is locked on the first real Agent prompt assembly. MCP
+ * restrictions are reconciled before the authoritative assembly reaches the
+ * model; Skill shadows are refreshed immediately before DSH's skill catalog.
  */
 
 import type { Context } from "@deepseek-ai/cordis";
@@ -12,7 +12,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 declare const harness: any;
 
 export const name = "dsh-workspace-scope";
-export const inject = ["webServer", "fs", "skills", "tools", "agents"];
+export const inject = ["webServer", "fs", "skills", "tools", "agents", "systemPrompt"];
 
 const CONFIG_FILE = ".dsh-scope.json";
 const ROUTE_PREFIX = "/api/dsh-workspace-scope";
@@ -100,23 +100,33 @@ interface ScopedToolsLike {
 
 interface AgentLike {
   id: string;
-  status: "idle" | "running";
   session: SessionLike;
   ctx: {
     skills: ScopedSkillsLike;
     tools: ScopedToolsLike;
   };
-  runMaintenance<T>(job: (signal: AbortSignal) => Promise<T>): Promise<T>;
-  whenIdle(): Promise<void>;
 }
 
 interface AgentsServiceLike {
   get(id: string): AgentLike | undefined;
-  list(): AgentLike[];
 }
 
 interface ToolsServiceLike {
   schemas(scope?: unknown): { name: string }[];
+}
+
+interface PromptAssemblyLike {
+  [key: string]: unknown;
+}
+
+interface AssembleContextLike {
+  agent?: AgentLike;
+  signal?: AbortSignal;
+  [key: string]: unknown;
+}
+
+interface SystemPromptLike {
+  assemble(context?: AssembleContextLike): Promise<PromptAssemblyLike>;
 }
 
 interface SandboxPolicyServiceLike {
@@ -157,6 +167,7 @@ export function apply(ctx: Context): void {
   const skills = ctx.get("skills") as SkillsServiceLike;
   const tools = ctx.get("tools") as ToolsServiceLike;
   const agents = ctx.get("agents") as AgentsServiceLike;
+  const systemPrompt = ctx.get("systemPrompt") as SystemPromptLike;
 
   async function readConfig(cwd: string | undefined): Promise<ScopeConfig> {
     if (cwd === undefined || cwd === "") return { ...DEFAULT_CONFIG };
@@ -235,8 +246,10 @@ export function apply(ctx: Context): void {
     return byServer;
   }
 
-  function mcpInventoryKey(byServer: Map<string, string[]>): string {
-    return JSON.stringify([...byServer.values()].flat().sort());
+  function deniedMcpTools(cfg: ScopeConfig, byServer: Map<string, string[]>): string[] {
+    return deniedServers(cfg, [...byServer.keys()])
+      .flatMap((server) => byServer.get(server) ?? [])
+      .sort();
   }
 
   function disposeAll(disposers: Array<() => void>): void {
@@ -299,47 +312,20 @@ export function apply(ctx: Context): void {
     }
   }
 
-  function installMcpPolicy(
-    agent: AgentLike,
-    cfg: ScopeConfig,
-    byServer: Map<string, string[]> = globalMcpToolsMap(),
-  ): (() => void) | undefined {
-    if (cfg.mode === "default") return undefined;
-    const denied = deniedServers(cfg, [...byServer.keys()]).flatMap(
-      (server) => byServer.get(server) ?? [],
-    );
-    return denied.length === 0 ? undefined : agent.ctx.tools.restrict({ deny: denied });
-  }
-
   interface ActivePolicy {
     agent: AgentLike;
     config: ScopeConfig;
+    mcpKey?: string;
     skillDispose?: () => void;
     mcpDispose?: () => void;
   }
 
   const activePolicies = new Map<string, ActivePolicy>();
-  let globalMcpKey = mcpInventoryKey(globalMcpToolsMap());
-
   const onEvent = ctx.on as unknown as (
     name: string,
     listener: (...args: never[]) => unknown,
     options?: boolean | { prepend?: boolean },
   ) => unknown;
-
-  async function initializeAgent(agent: AgentLike, signal: AbortSignal): Promise<void> {
-    const cfg = await readConfig(agent.session.header.cwd);
-    signal.throwIfAborted();
-    const mcpDispose = installMcpPolicy(agent, cfg);
-    const previous = activePolicies.get(agent.id);
-    safeDispose(previous?.skillDispose);
-    safeDispose(previous?.mcpDispose);
-    activePolicies.set(agent.id, { agent, config: cfg, mcpDispose });
-  }
-
-  function startAgentPolicy(agent: AgentLike): Promise<void> {
-    return agent.runMaintenance((signal) => initializeAgent(agent, signal));
-  }
 
   ctx.effect(() => () => {
     for (const policy of activePolicies.values()) {
@@ -349,8 +335,6 @@ export function apply(ctx: Context): void {
     activePolicies.clear();
   });
 
-  onEvent("agent/session-start", ({ agent }: { agent: AgentLike }) => startAgentPolicy(agent));
-
   onEvent("agent/disposed", ({ agent }: { agent: AgentLike }) => {
     const policy = activePolicies.get(agent.id);
     safeDispose(policy?.skillDispose);
@@ -358,21 +342,50 @@ export function apply(ctx: Context): void {
     activePolicies.delete(agent.id);
   });
 
-  // Global ToolRuntime changes happen before the next prompt assembly. Refresh
-  // only MCP restrictions; restriction changes themselves keep this key stable,
-  // so their own tools/change notifications terminate here without recursion.
-  onEvent("tools/change", () => {
-    const byServer = globalMcpToolsMap();
-    const nextKey = mcpInventoryKey(byServer);
-    if (nextKey === globalMcpKey) return;
-    globalMcpKey = nextKey;
-    for (const policy of activePolicies.values()) {
-      const next = installMcpPolicy(policy.agent, policy.config, byServer);
-      const previous = policy.mcpDispose;
-      policy.mcpDispose = next;
+  // The AgentLoop assembles before agent/pre-step. Lock config at the first
+  // turn-owned assembly (a real model step has a signal; diagnostics need not
+  // lock anything). If the MCP mask changes, rebuild the whole assembly once
+  // under the new native restriction so native and PTC presentations agree.
+  onEvent(
+    "system-prompt/assemble",
+    async (
+      _assembly: PromptAssemblyLike,
+      context: AssembleContextLike,
+      next: () => Promise<PromptAssemblyLike>,
+    ): Promise<PromptAssemblyLike> => {
+      const agent = context.agent;
+      const signal = context.signal;
+      if (agent === undefined || signal === undefined) return next();
+      signal.throwIfAborted();
+
+      let active = activePolicies.get(agent.id);
+      if (active === undefined) {
+        const config = await readConfig(agent.session.header.cwd);
+        signal.throwIfAborted();
+        active = { agent, config };
+        activePolicies.set(agent.id, active);
+      }
+
+      const denied = deniedMcpTools(active.config, globalMcpToolsMap());
+      const key = JSON.stringify(denied);
+      if (active.mcpKey === key) return next();
+
+      const replacement = denied.length === 0
+        ? undefined
+        : agent.ctx.tools.restrict({ deny: denied });
+      const previous = active.mcpDispose;
+      active.mcpDispose = replacement;
+      active.mcpKey = key;
       safeDispose(previous);
-    }
-  });
+
+      // No restriction existed and none is needed: the assembly already built
+      // by DSH is authoritative. Every other change requires one clean rebuild.
+      if (previous === undefined && replacement === undefined) return next();
+      signal.throwIfAborted();
+      return systemPrompt.assemble(context);
+    },
+    { prepend: true },
+  );
 
   onEvent(
     "agent/pre-step",
@@ -383,33 +396,24 @@ export function apply(ctx: Context): void {
       payload.signal.throwIfAborted();
       const active = activePolicies.get(payload.agent.id);
       if (active === undefined) {
-        // Safe failure for a plugin load racing an already-running Agent: never
-        // send the assembly that was built before this workspace policy existed.
+        // A plugin load that races an already-built assembly must fail closed.
         throw new Error("dsh-workspace-scope: workspace policy is not initialized");
       }
 
-      // tool-skill publishes its catalog later in this same pre-step waterfall,
-      // so refreshing only Skill shadows here still affects the current step.
-      const refreshed = await installSkillPolicy(payload.agent, active.config, payload.signal);
+      // Remove our previous runtime shadow before discovery. Otherwise the
+      // scoped snapshot sees modelInvocable:false and cannot rebuild itself.
       const previous = active.skillDispose;
-      active.skillDispose = refreshed;
+      delete active.skillDispose;
       safeDispose(previous);
+      active.skillDispose = await installSkillPolicy(
+        payload.agent,
+        active.config,
+        payload.signal,
+      );
       return next();
     },
     { prepend: true },
   );
-
-  // HMR/plugin reload can attach after Agents already exist. Idle Agents are
-  // reserved immediately; running Agents are initialized as soon as they quiesce.
-  for (const agent of agents.list()) {
-    const pending =
-      agent.status === "idle"
-        ? startAgentPolicy(agent)
-        : agent.whenIdle().then(() => startAgentPolicy(agent));
-    void pending.catch((err: unknown) => {
-      ctx.logger.warn(`dsh-workspace-scope: failed to initialize live agent: ${String(err)}`);
-    });
-  }
 
   async function overviewResult(sessionId: string): Promise<Record<string, unknown>> {
     const agent = resolveAgent(sessionId);
