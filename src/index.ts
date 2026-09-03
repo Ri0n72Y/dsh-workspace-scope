@@ -1,9 +1,9 @@
 /**
  * dsh-workspace-scope — Host half.
  *
- * A workspace-local policy decides which Skills and MCP servers a new
- * conversation exposes to the model. Skill capability policy is expressed
- * through DSH's scoped SkillRegistry; MCP tool policy uses the scoped
+ * A workspace-local policy decides which Skills and Host-global MCP servers a
+ * new conversation exposes to the model. Skill capability policy is expressed
+ * through DSH's scoped SkillRegistry; global MCP tool policy uses the scoped
  * ToolRuntime restriction. User-explicit /<skill> invocation keeps the
  * skill's original user policy.
  */
@@ -166,46 +166,53 @@ export function apply(ctx: Context): void {
     }
   }
 
-  async function writeConfig(
+  // ponytail: one queue is enough; split per cwd only if config-write throughput matters.
+  let configWriteQueue: Promise<void> = Promise.resolve();
+
+  function writeConfig(
     cwd: string | undefined,
     cfg: ScopeConfig,
     session: SessionLike | undefined,
   ): Promise<{ saved: boolean; reason?: string }> {
-    const fs = ctx.get("fs") as FsServiceLike | undefined;
-    if (fs === undefined || cwd === undefined || cwd === "") {
-      return { saved: false, reason: "无法确定工作目录，未保存" };
-    }
-    try {
-      const target = await fs.resolve(`${cwd}/${CONFIG_FILE}`);
-      let all: Record<string, unknown> = {};
-      try {
-        const parsed = JSON.parse(await fs.readText(target)) as unknown;
-        if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-          all = parsed as Record<string, unknown>;
-        }
-      } catch {
-        // Missing or invalid file: write a fresh document.
+    const write = configWriteQueue.then(async () => {
+      const fs = ctx.get("fs") as FsServiceLike | undefined;
+      if (fs === undefined || cwd === undefined || cwd === "") {
+        return { saved: false, reason: "无法确定工作目录，未保存" };
       }
-      all.default = cfg;
-      const sandboxPolicy = ctx.get("sandboxPolicy") as SandboxPolicyServiceLike | undefined;
-      const policy =
-        sandboxPolicy !== undefined && session !== undefined
-          ? sandboxPolicy.resolve({ session, mode: "workspace-write" })
-          : undefined;
-      await fs.writeText(
-        target,
-        JSON.stringify(all, null, 2),
-        undefined,
-        undefined,
-        policy,
-      );
-      return { saved: true };
-    } catch (err) {
-      return {
-        saved: false,
-        reason: String((err && (err as Error).message) || err),
-      };
-    }
+      try {
+        const target = await fs.resolve(`${cwd}/${CONFIG_FILE}`);
+        let all: Record<string, unknown> = {};
+        try {
+          const parsed = JSON.parse(await fs.readText(target)) as unknown;
+          if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+            all = parsed as Record<string, unknown>;
+          }
+        } catch {
+          // Missing or invalid file: write a fresh document.
+        }
+        all.default = cfg;
+        const sandboxPolicy = ctx.get("sandboxPolicy") as SandboxPolicyServiceLike | undefined;
+        const policy =
+          sandboxPolicy !== undefined && session !== undefined
+            ? sandboxPolicy.resolve({ session, mode: "workspace-write" })
+            : undefined;
+        await fs.writeText(
+          target,
+          JSON.stringify(all, null, 2),
+          undefined,
+          undefined,
+          policy,
+        );
+        return { saved: true };
+      } catch (err) {
+        return {
+          saved: false,
+          reason: String((err && (err as Error).message) || err),
+        };
+      }
+    });
+    configWriteQueue = write.then(() => undefined);
+    return write;
   }
 
   function resolveAgent(sessionId: string): AgentLike | undefined {
@@ -213,9 +220,11 @@ export function apply(ctx: Context): void {
     return (ctx.get("agents") as AgentsServiceLike | undefined)?.get(sessionId);
   }
 
-  function serverToolsMap(): Map<string, string[]> {
+  function globalMcpToolsMap(): Map<string, string[]> {
     const byServer = new Map<string, string[]>();
     const tools = ctx.get("tools") as ToolsServiceLike | undefined;
+    // No scope argument means the Host-global ToolRuntime view. Agent/Preset
+    // scoped MCP registrations are intentionally outside this plugin's boundary.
     for (const schema of tools?.schemas() ?? []) {
       const match = /^mcp__(.+?)__(.+)$/.exec(schema.name);
       if (match === null) continue;
@@ -280,8 +289,8 @@ export function apply(ctx: Context): void {
         }
       }
 
-      // MCP tool policy: use DSH's native scoped tool restriction directly.
-      const byServer = serverToolsMap();
+      // Host-global MCP policy: restrict only inherited global MCP tools.
+      const byServer = globalMcpToolsMap();
       const deniedMcp = deniedServers(cfg, [...byServer.keys()]).flatMap(
         (server) => byServer.get(server) ?? [],
       );
@@ -306,6 +315,13 @@ export function apply(ctx: Context): void {
     listener: (...args: never[]) => unknown,
     options?: boolean | { prepend?: boolean },
   ) => unknown;
+
+  // The registrations live in agent scopes, so plugin unload/HMR must lift
+  // them explicitly while those agents are still alive.
+  ctx.effect(() => () => {
+    for (const dispose of activePolicies.values()) dispose();
+    activePolicies.clear();
+  });
 
   onEvent("agent/disposed", (agent: AgentLike) => {
     activePolicies.get(agent.id)?.();
@@ -356,7 +372,7 @@ export function apply(ctx: Context): void {
         // An unavailable provider should not break the management UI.
       }
     }
-    const byServer = serverToolsMap();
+    const byServer = globalMcpToolsMap();
     const mcp = [...byServer.keys()].sort().map((server) => ({
       server,
       toolCount: (byServer.get(server) ?? []).length,
