@@ -23,7 +23,7 @@ The dialog lists all manageable entries under two groups, Skills and global MCP 
 - Clicking the row expands details (description for skills, tool count for global MCP servers)
 - Enable all / disable all quick buttons at the bottom; every change saves immediately
 
-Saving writes the config to `.dsh-scope.json` in the workspace root and only affects sessions created later in that workspace. Once a conversation starts, its config values are locked; changing the file mid-conversation does not alter that conversation. Before each later model step, the plugin reconciles that locked config against DSH's current Skill and Host-global MCP registries, so Skill hot refresh and MCP reconnect/tool-list changes remain subject to the same workspace policy. Excluded skills that remain user-invocable can still be loaded ad hoc with the `/skill-name` gesture.
+Saving writes the config to `.dsh-scope.json` in the workspace root and only affects sessions created later in that workspace. At session start the plugin locks the config and applies the Host-global MCP policy before the first model prompt assembly. Later pre-steps refresh Skills from the same locked config, while Host-global MCP restrictions refresh only when the global tool registry changes. Editing `.dsh-scope.json` mid-conversation does not alter that conversation. Excluded skills that remain user-invocable can still be loaded ad hoc with the `/skill-name` gesture.
 
 ## Configuration
 
@@ -52,16 +52,14 @@ flowchart LR
     A[User opens the dialog] --> B[Toggles Skills and global MCP servers]
     B --> C[Save]
     C --> D[.dsh-scope.json<br/>workspace root]
-    E[First pre-step of a new session] --> F[Read and lock config]
+    E[agent/session-start] --> F[runMaintenance<br/>read and lock config]
     D --> F
-    F --> G[Install Agent policy from current registries]
-    M[Later pre-step] --> N[Reuse locked config]
-    N --> G
-    G --> H[Skill shadow<br/>modelInvocable=false]
-    G --> I[tools.restrict<br/>Host-global MCP]
-    H --> J[Native DSH Skill catalog / skill tool]
-    I --> K[Model-visible tools]
-    L[/skill-name] --> O[Original userInvocable policy preserved]
+    F --> G[tools.restrict<br/>Host-global MCP before first prompt assembly]
+    H[agent/pre-step] --> I[Refresh Skill shadows from locked config]
+    I --> J[Native DSH Skill catalog / skill tool]
+    K[tools/change] --> L[Host-global MCP inventory changed]
+    L --> G
+    M[/skill-name] --> N[Original userInvocable policy preserved]
 ```
 
 ## Contributing
