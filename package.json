@@ -1,7 +1,7 @@
 {
   "name": "dsh-workspace-scope",
-  "version": "0.3.2",
-  "description": "Per-workspace Skill and MCP enablement for DeepSeek Harness: each project controls which skills and MCP servers new sessions load.",
+  "version": "0.4.0",
+  "description": "Per-workspace Skill and Host-global MCP enablement for DeepSeek Harness: each project controls which skills and inherited global MCP servers new sessions expose.",
   "keywords": [
     "dsh",
     "dsh-plugin",
@@ -52,7 +52,7 @@
       "host": "src/index.ts",
       "client": "src/client/dynamic.tsx",
       "idPrefix": "wscp",
-      "purpose": "按工作区（工程）启停 Skill 与 MCP（plugin-dev-loop 热测）",
+      "purpose": "按工作区（工程）启停 Skill 与 Host 全局 MCP（plugin-dev-loop 热测）",
       "outDir": "dist/dynamic"
     }
   },

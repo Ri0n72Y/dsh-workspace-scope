@@ -1,11 +1,11 @@
 /**
  * dsh-workspace-scope — Client half (TSX).
  *
- * 按工作区（工程）启停 Skill 与 MCP。入口只在新建会话界面（hero）：
+ * 按工作区（工程）启停 Skill 与 Host 全局 MCP。入口只在新建会话界面（hero）：
  * 输入卡右侧工具行（conversation.input.right）的紧凑 chip；已进行的
  * 对话不显示入口（配置在会话开始时锁定，修改只影响该工作区的新对话）。
  * 弹窗样式参考「设置 → 插件」页（搜索框 + 分组计数 + 卡片网格）。
- * Skill 与 MCP 全部条目始终展示，勾选即启用（白名单语义），
+ * Skill 与 Host 全局 MCP 全部可管理条目始终展示，勾选即启用（白名单语义），
  * 提供 全部启用 / 全部禁用 快捷按钮，改动即时保存。配置只影响新对话开场。
  *
  * 数据通道双环境：动态（plugin-dev-loop）client 沙箱禁止 fetch，走
@@ -304,7 +304,7 @@ function ScopeBar(props: DockProps): React.ReactElement | null {
       className="wsc-chip"
       onClick={() => setModalFn(!open)}
       aria-expanded={open}
-      title="按工作区配置新对话启用的 Skill 与 MCP"
+      title="按工作区配置新对话启用的 Skill 与 Host 全局 MCP"
     >
       <PresetIcon className="wsc-seat-icon" />
       <span>工作区能力</span>
@@ -326,7 +326,7 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
   } | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [expanded, setExpanded] = React.useState<string | null>(null);
-  // Per-group collapse for the skill / MCP sections (heading arrow).
+  // Per-group collapse for the skill / global MCP sections (heading arrow).
   const [collapsed, setCollapsed] = React.useState<{
     skills: boolean;
     mcps: boolean;
@@ -443,8 +443,8 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
 
   // ── autosave: every draft change persists immediately ─────────────────────
   // No debounce: the dynamic client sandbox has no timer globals, and a small
-  // local JSON write per change is cheap. Rapid changes each issue their own
-  // write; the last one wins on disk, and stale responses are dropped below.
+  // local JSON write per change is cheap. The Host serializes writes so rapid
+  // changes preserve issue order on disk; stale responses are dropped below.
 
   const autosave = React.useCallback(
     (next: ScopeDraft): void => {
@@ -601,7 +601,7 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
               ) : (
                 <div>
                   <dt>类型</dt>
-                  <dd>MCP 服务器</dd>
+                  <dd>Host 全局 MCP 服务器</dd>
                 </div>
               )}
             </dl>
@@ -623,7 +623,7 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
       <div className="wsc-body">
         <p className="wsc-desc">
           仅对新对话开场生效：本配置决定新对话开始时注入的技能与
-          MCP，已进行的对话不受影响。不影响 /&lt;技能名&gt;
+          Host 全局 MCP，已进行的对话不受影响。不影响 /&lt;技能名&gt;
           手势：对话中随时可用。改动即时保存。
         </p>
         <label className="wsc-search">
@@ -631,8 +631,8 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
           <input
             type="search"
             value={query}
-            placeholder="搜索技能或 MCP…"
-            aria-label="搜索技能或 MCP"
+            placeholder="搜索技能或全局 MCP…"
+            aria-label="搜索技能或全局 MCP"
             onChange={(event) => setQuery(event.currentTarget.value)}
           />
         </label>
@@ -671,7 +671,7 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
           aria-expanded={!collapsed.mcps}
           onClick={() => setCollapsed((c) => ({ ...c, mcps: !c.mcps }))}
         >
-          <h3>MCP 服务器</h3>
+          <h3>全局 MCP 服务器</h3>
           <span data-count={visibleMcps.length}>{visibleMcps.length}</span>
           <ChevronIcon className="wsc-heading-chevron" />
         </button>
@@ -690,7 +690,7 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
               )}
             </ul>
           ) : (
-            <p className="wsc-hint">没有匹配的 MCP 服务器。</p>
+            <p className="wsc-hint">没有匹配的全局 MCP 服务器。</p>
           ))}
         <div className="wsc-actions">
           <button type="button" className="wsc-btn" onClick={allEnabled}>
