@@ -313,7 +313,7 @@ export function apply(ctx: Context): void {
 
   interface ActivePolicy {
     config: ScopeConfig;
-    dispose: () => void;
+    dispose?: () => void;
   }
 
   const activePolicies = new Map<string, ActivePolicy>();
@@ -326,12 +326,12 @@ export function apply(ctx: Context): void {
   // The registrations live in agent scopes, so plugin unload/HMR must lift
   // them explicitly while those agents are still alive.
   ctx.effect(() => () => {
-    for (const policy of activePolicies.values()) policy.dispose();
+    for (const policy of activePolicies.values()) policy.dispose?.();
     activePolicies.clear();
   });
 
   onEvent("agent/disposed", ({ agent }: { agent: AgentLike }) => {
-    activePolicies.get(agent.id)?.dispose();
+    activePolicies.get(agent.id)?.dispose?.();
     activePolicies.delete(agent.id);
   });
 
@@ -347,8 +347,8 @@ export function apply(ctx: Context): void {
         // The workspace config is locked, while DSH's Skill/MCP registries stay
         // live. Rebuild the scoped policy from the current registries before
         // every model step so hot-refresh/reconnect cannot bypass that lock.
-        active.dispose();
-        active.dispose = () => {};
+        active.dispose?.();
+        delete active.dispose;
         active.dispose = await installCapabilityPolicy(
           payload.agent,
           active.config,
