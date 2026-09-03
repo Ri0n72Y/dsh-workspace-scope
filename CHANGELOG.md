@@ -8,10 +8,15 @@ All notable changes to this project are documented in this file. The format is b
 
 ### Changed
 - Skill scoping now uses DSH's native per-agent `SkillRegistry` layers: excluded model-invocable skills are shadowed in the agent scope with `modelInvocable: false` while preserving their original user-invocation policy.
-- MCP scoping continues to use the native scoped `tools.restrict()` path. The capability-policy `agent/pre-step` listener is explicitly prepended so Skill and MCP policy are installed before downstream pre-step consumers run.
+- MCP scoping continues to use the native scoped `tools.restrict()` path and is explicitly limited to Host-global MCP tools inherited by the Agent; Agent/Preset-scoped MCP registrations stay outside this plugin's management boundary.
+- The capability-policy `agent/pre-step` listener is explicitly prepended so Skill and global MCP policy are installed before downstream pre-step consumers run.
 - The workspace config is locked only after the first pre-step is accepted. A rejected or failed first pre-step rolls back the provisional scoped registrations and can retry with the latest workspace config.
 - Saving `.dsh-scope.json` no longer mutates a fresh agent immediately; the policy is installed once at conversation start.
-- The management overview inventories every discovered Skill and MCP server; `.dsh-scope.json` independently supplies each row's enabled/disabled switch state, so an existing capability remains visible in the UI even when it is excluded from model use.
+- The management overview inventories every discovered Skill and Host-global MCP server; `.dsh-scope.json` independently supplies each row's enabled/disabled switch state, so an existing capability remains visible in the UI even when it is excluded from model use.
+
+### Fixed
+- Plugin unload/HMR now disposes capability policies previously installed into live Agent scopes, preventing stale Skill shadows or MCP restrictions from surviving a reload.
+- Workspace config writes are serialized so rapid autosaves cannot complete out of order and roll `.dsh-scope.json` back to an older switch state.
 
 ### Removed
 - Removed the custom `skill-catalog` message renderer/filter, the full-`source.entries` digest workaround, and the extra `tools/pre-execute` Skill deny guard.
