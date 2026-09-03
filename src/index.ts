@@ -211,7 +211,7 @@ export function apply(ctx: Context): void {
         };
       }
     });
-    configWriteQueue = write.then(() => undefined, () => undefined);
+    configWriteQueue = write.then(() => undefined);
     return write;
   }
 
