@@ -2,7 +2,7 @@
 
 ## Project
 
-dsh-workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that turns Skills and MCP servers on and off per workspace, controlling the startup context of new sessions. The static deployment form is a standard DSH bundle; the `dsh.dynamic` section exists only for hot testing.
+dsh-workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that turns Skills and Host-global MCP servers on and off per workspace, controlling which capabilities new sessions expose to the model. Agent/Preset-scoped MCP registrations are outside this plugin's management boundary. The static deployment form is a standard DSH bundle; the `dsh.dynamic` section exists only for hot testing.
 
 ## Common commands (workdir: dsh-workspace-scope/)
 
@@ -14,29 +14,31 @@ dsh-workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that turns Ski
 
 ## Architecture
 
-- Two halves. Host (src/index.ts, Node): pre-step trims the skill catalog message per workspace config, `agent.ctx.tools.restrict` trims MCP tools, `tools/pre-execute` is the fallback that blocks excluded skills, plus the overview/save endpoints. Client (src/client/index.tsx, browser): entry bar and dialog.
-- Dual-environment data channel. The dynamic client sandbox forbids import and fetch, so it uses `harness.handle` (host side) with `host.call` (client side); the static bundle uses the webServer routes `/api/dsh-workspace-scope` (GET overview / POST save). The client's callHost() switches on `typeof host !== 'undefined'`.
-- dynamic.tsx is a script artifact: @ts-nocheck header, `declare const React: any`, `apply(ctx: any)`; everything else must match index.tsx byte for byte. gen-dynamic.mjs validates the markers and fails loudly if any is missing.
-- Entry seat: the new-session screen only, conversation.input.right (compact chip, rendered when the current session is blank). Ongoing conversations never show the entry: the scope is locked in at conversation start, so it only shapes new sessions. The dialog mounts in shell.overlay; module-level modalOpen plus modalListeners shares the open state with the chip.
-- Config: .dsh-scope.json in the workspace root, `default` key {mode, skills[], mcps[]}. The UI always saves `whitelist` (checked means enabled); reading accepts legacy default/blacklist. Session lock: appliedConfigs per agent.id locks at the first pre-step, so changing the config does not affect started conversations.
-- Writing the config must pass `sandboxPolicy.resolve({ session, mode: 'workspace-write' })` explicitly. Saving is a UI management operation, not bound by the session read-only mode.
+- Two halves. Host (`src/index.ts`, Node): the first accepted `agent/pre-step` locks `.dsh-scope.json` for that Agent. Excluded Skills are shadowed in the Agent's native SkillRegistry layer with `modelInvocable: false`; excluded Host-global MCP tools are masked with `agent.ctx.tools.restrict()`. Later pre-steps keep the locked config but rebuild the scoped policy from the current DSH registries, so Skill hot-refresh and MCP reconnect/list changes cannot bypass the workspace policy. The Host also owns overview/save endpoints.
+- Dual-environment data channel. The dynamic client sandbox forbids import and fetch, so it uses `harness.handle` (host side) with `host.call` (client side); the static bundle uses the webServer routes `/api/dsh-workspace-scope` (GET overview / POST save). The client's `callHost()` switches on `typeof host !== 'undefined'`.
+- `dynamic.tsx` is a generated script artifact: `@ts-nocheck` header, `declare const React: any`, `apply(ctx: any)`; everything else must match `index.tsx`. `gen-dynamic.mjs` validates the markers and fails loudly if any is missing.
+- Entry seat: the new-session screen only, `conversation.input.right` (compact chip, rendered when the current session is blank). Ongoing conversations never show the entry: the config is locked at conversation start, so UI changes only shape later sessions. The dialog mounts in `shell.overlay`; module-level `modalOpen` plus `modalListeners` shares the open state with the chip.
+- Config: `.dsh-scope.json` in the workspace root, `default` key `{mode, skills[], mcps[]}`. The UI always saves `whitelist` (checked means enabled); reading accepts legacy `default` / `blacklist`.
+- `activePolicies` is keyed by `agent.id` and stores the locked config plus the current policy disposer. Agent disposal and plugin unload/HMR both release the scoped registrations.
+- Writing the config must pass `sandboxPolicy.resolve({ session, mode: 'workspace-write' })` explicitly. Writes are serialized through one plugin-local queue so rapid autosaves cannot land out of order. Saving is a UI management operation, not bound by the session read-only mode.
 
 ## UI conventions
 
 - Chinese copy in the UI, English comments in code.
-- Styles use only `--dsw-*` theme tokens (zero hardcoded colors), so a theme switch re-skins automatically. CSS lives as a string array at the top of index.tsx (the dynamic sandbox forbids bundler/import; do not switch to an imported CSS file).
-- Class prefix `wsc-`. Interactions follow the harness settings plugin-inventory page: collapsible rows with details, search box, collapsible group headings (data-collapsed rotates the arrow).
+- Styles use only `--dsw-*` theme tokens (zero hardcoded colors), so a theme switch re-skins automatically. CSS lives as a string array at the top of `index.tsx` (the dynamic sandbox forbids bundler/import; do not switch to an imported CSS file).
+- Class prefix `wsc-`. Interactions follow the harness settings plugin-inventory page: collapsible rows with details, search box, collapsible group headings (`data-collapsed` rotates the arrow).
 - The Switch is a hand-rolled `button[role=switch]` (the harness has no reusable component): 28x16 track, 12x12 thumb, enabled color and focus ring from `--dsw-alias-state-business-primary`.
 
 ## Known trade-offs (read before touching related code)
 
-- The trimmed catalog keeps the FULL source.entries on the rebuilt message (only the visible text is trimmed to the enabled set). tool-skill's stability check digests the last model-visible catalog message, so keeping entries full keeps its digest equal to the snapshot and no catalog is re-injected on later steps. A republish only happens when the skill set actually changes.
-- With `DSH_TOOLS_MODE=code` the MCP part silently does nothing (serverToolsMap is empty); `native` and `both` work.
-- Incompatible with ../session-scope (the old dynamic build): they overwrite each other's `default` key; never run both.
+- Global MCP inventory is derived from the conventional `mcp__<server>__<tool>` public tool-name prefix because DSH currently exposes no stable MCP owner/server metadata on `ToolSchema`. Public-name normalization means unusual server names containing the delimiter can be ambiguous; do not build a second MCP registry to compensate. Replace this inference when DSH exposes a stable ownership seam.
+- Agent/Preset-scoped MCP registrations are deliberately not managed. `tools.restrict()` is the supported per-Agent mask for inherited global tools and does not mask scoped registrations.
+- Incompatible with `../session-scope` (the old dynamic build): they overwrite each other's `default` key; never run both.
 - Playwright background tabs freeze CSS transitions: a transitioning property's computed value overrides inline and important styles, so verifying transform or color transitions needs a temporary `transition:none`.
 
 ## Product boundaries (what the plugin does not do)
 
-- Does not install, add, remove, or edit MCP or skill configs (MCP config stays in cordis.patch.yml)
-- No global on/off, no global inventory panel
-- No skill library management
+- Does not install, add, remove, or edit MCP or Skill configs (MCP config stays in Cordis configuration)
+- Does not manage Agent/Preset-scoped MCP registrations
+- No global on/off or global inventory panel
+- No Skill library management
