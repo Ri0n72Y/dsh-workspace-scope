@@ -135,7 +135,7 @@ describe('workspace-scope client', () => {
     openDialog()
     await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(4))
 
-    const search = screen.getByRole('searchbox', { name: '搜索技能或 MCP' })
+    const search = screen.getByRole('searchbox', { name: '搜索技能或全局 MCP' })
     fireEvent.change(search, { target: { value: 'playwright' } })
 
     await waitFor(() => {
@@ -324,7 +324,7 @@ describe('workspace-scope client', () => {
     openDialog()
     await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(4))
 
-    fireEvent.change(screen.getByRole('searchbox', { name: '搜索技能或 MCP' }), { target: { value: 'skill-a' } })
+    fireEvent.change(screen.getByRole('searchbox', { name: '搜索技能或全局 MCP' }), { target: { value: 'skill-a' } })
     await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(1))
 
     fireEvent.keyDown(window, { key: 'Escape' })
@@ -332,7 +332,7 @@ describe('workspace-scope client', () => {
 
     openDialog()
     await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
-    expect((screen.getByRole('searchbox', { name: '搜索技能或 MCP' }) as HTMLInputElement).value).toBe('')
+    expect((screen.getByRole('searchbox', { name: '搜索技能或全局 MCP' }) as HTMLInputElement).value).toBe('')
   })
 
   it('traps Tab focus inside the dialog', async () => {
