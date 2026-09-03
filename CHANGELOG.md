@@ -9,16 +9,21 @@ All notable changes to this project are documented in this file. The format is b
 ### Changed
 - Skill scoping now uses DSH's native per-agent `SkillRegistry` layers: excluded model-invocable skills are shadowed in the agent scope with `modelInvocable: false` while preserving their original user-invocation policy.
 - MCP scoping continues to use the native scoped `tools.restrict()` path and is explicitly limited to Host-global MCP tools inherited by the Agent; Agent/Preset-scoped MCP registrations stay outside this plugin's management boundary.
-- The capability-policy `agent/pre-step` listener is explicitly prepended so Skill and global MCP policy are installed before downstream pre-step consumers run.
-- The workspace config is locked only after the first pre-step is accepted. A rejected or failed first pre-step rolls back the provisional scoped registrations and can retry with the latest workspace config.
-- Saving `.dsh-scope.json` no longer mutates a fresh agent immediately. After the config is locked, each later pre-step reconciles the scoped policy against DSH's current Skill and global MCP registries without rereading the file.
+- For DSH 0.1.2-rc.1's assembly-before-pre-step loop, workspace config is read and locked at the first turn-owned `system-prompt/assemble`. Agent-scoped diagnostic assemblies without a turn signal do not lock a blank session.
+- MCP policy is reconciled against the current Host-global tool view on each real Agent prompt assembly. When the effective denied tool set changes, the plugin installs the replacement scoped restriction, discards the pre-policy assembly, and asks DSH to assemble once more so native and PTC tool presentation are both generated under the same policy.
+- The prepended `agent/pre-step` listener refreshes only Skill shadows immediately before DSH's `tool-skill` catalog listener. It removes the previous shadows before discovery so the scoped SkillRegistry snapshot sees the underlying winning definitions.
+- The Host declares its actual hard service dependencies: `webServer`, `fs`, `skills`, `tools`, `agents`, and `systemPrompt`; `sandboxPolicy` remains optional.
+- Saving `.dsh-scope.json` does not mutate an active Agent's locked config. UI changes made before the first real model request apply to that conversation; later file edits apply only to later unlocked conversations.
 - The management overview inventories every discovered Skill and Host-global MCP server; `.dsh-scope.json` independently supplies each row's enabled/disabled switch state, so an existing capability remains visible in the UI even when it is excluded from model use.
 
 ### Fixed
-- Plugin unload/HMR now disposes capability policies previously installed into live Agent scopes, preventing stale Skill shadows or MCP restrictions from surviving a reload.
+- Host-global MCP restrictions no longer arrive one model request late under current DSH. A changed mask forces one complete reassembly before the request reaches the model, including PTC's generated SDK guidance.
+- Excluded Skills remain excluded on second and later steps. Previously a refresh could snapshot the plugin's own `modelInvocable: false` shadow, skip rebuilding it, then dispose that shadow and expose the underlying Skill to the same step's catalog.
+- Skill shadow installation now verifies the post-registration scoped catalog and fails the pre-step closed if DSH's same-layer runtime first-wins rule prevents the deny shadow from winning, so an excluded Skill cannot silently remain model-invocable.
+- Plugin unload disposes capability policies previously installed into live Agent scopes, preventing stale Skill shadows or MCP restrictions from surviving the plugin instance.
 - Workspace config writes are serialized so rapid autosaves cannot complete out of order and roll `.dsh-scope.json` back to an older switch state.
-- Agent disposal now consumes DSH's `{ agent }` event payload correctly, so a resumed/recreated Agent with the same session id does not inherit a stale `activePolicies` entry.
-- Locked workspace policy is rebuilt from the current registries before later model steps, so Skill hot-refresh and Host-global MCP reconnect/list changes cannot expose newly appeared excluded capabilities.
+- Agent disposal consumes DSH's `{ agent }` event payload correctly, so a resumed/recreated Agent with the same session id does not inherit a stale `activePolicies` entry.
+- MCP server grouping follows DSH's exact public-name contract, including the `[A-Za-z0-9_-]{1,32}` server-name constraint, removing the old delimiter-ambiguity assumption.
 
 ### Removed
 - Removed the custom `skill-catalog` message renderer/filter, the full-`source.entries` digest workaround, and the extra `tools/pre-execute` Skill deny guard.

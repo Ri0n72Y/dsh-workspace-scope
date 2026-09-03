@@ -14,7 +14,7 @@ MCP scope here explicitly means Host-global MCP tools inherited by an Agent. MCP
 
 ## Usage
 
-The entry lives on the new-session screen: the "Workspace scope" button in the tool row of the input card. Ongoing conversations do not show it, since the scope is fixed once a conversation starts and only affects sessions created later.
+The entry lives on the new-session screen: the "Workspace scope" button in the tool row of the input card. Ongoing conversations do not show it. The config locks when that conversation starts its first real model request, so changes made on the new-session screen still apply to the conversation about to start; later file edits do not mutate a locked conversation.
 
 The dialog lists all manageable entries under two groups, Skills and global MCP servers, and each group heading can be collapsed on its own:
 
@@ -23,7 +23,7 @@ The dialog lists all manageable entries under two groups, Skills and global MCP 
 - Clicking the row expands details (description for skills, tool count for global MCP servers)
 - Enable all / disable all quick buttons at the bottom; every change saves immediately
 
-Saving writes the config to `.dsh-scope.json` in the workspace root and only affects sessions created later in that workspace. Once a conversation starts, its config values are locked; changing the file mid-conversation does not alter that conversation. Before each later model step, the plugin reconciles that locked config against DSH's current Skill and Host-global MCP registries, so Skill hot refresh and MCP reconnect/tool-list changes remain subject to the same workspace policy. Excluded skills that remain user-invocable can still be loaded ad hoc with the `/skill-name` gesture.
+Saving writes the config to `.dsh-scope.json` in the workspace root. The first prompt assembly owned by a model turn reads and locks that config. When the effective Host-global MCP deny set changes, the plugin updates the Agent's native `tools.restrict()` mask and asks DSH to rebuild the complete prompt assembly once, so native and PTC tool presentation use the same policy. Skills are refreshed from the locked config at each pre-step. Excluded skills that remain user-invocable can still be loaded ad hoc with the `/skill-name` gesture.
 
 ## Configuration
 
@@ -52,16 +52,18 @@ flowchart LR
     A[User opens the dialog] --> B[Toggles Skills and global MCP servers]
     B --> C[Save]
     C --> D[.dsh-scope.json<br/>workspace root]
-    E[First pre-step of a new session] --> F[Read and lock config]
+    E[First real system-prompt/assemble] --> F[Read and lock config]
     D --> F
-    F --> G[Install Agent policy from current registries]
-    M[Later pre-step] --> N[Reuse locked config]
-    N --> G
-    G --> H[Skill shadow<br/>modelInvocable=false]
-    G --> I[tools.restrict<br/>Host-global MCP]
-    H --> J[Native DSH Skill catalog / skill tool]
-    I --> K[Model-visible tools]
-    L[/skill-name] --> O[Original userInvocable policy preserved]
+    F --> G[Compute Host-global MCP deny set]
+    G --> H{Mask changed?}
+    H -->|Yes| I[tools.restrict]
+    I --> J[Rebuild complete assembly once]
+    H -->|No| K[Keep current assembly]
+    J --> L[Model-visible tools / PTC SDK]
+    K --> L
+    M[agent/pre-step] --> N[Refresh Skill shadows]
+    N --> O[Native DSH Skill catalog / skill tool]
+    P[/skill-name] --> Q[Original userInvocable policy preserved]
 ```
 
 ## Contributing

@@ -2,7 +2,11 @@
 import { describe, expect, it } from 'vitest'
 import { apply } from '../src/index'
 
-const SERVERS = ['mcp__playwright__navigate', 'mcp__playwright__click', 'mcp__github__list']
+const SERVER_TOOLS = [
+  'mcp__playwright__navigate',
+  'mcp__playwright__click',
+  'mcp__github__list',
+]
 const SKILLS = [
   {
     name: 'keep-skill',
@@ -37,10 +41,18 @@ const BLACKLIST_TEXT = JSON.stringify({
   default: { mode: 'blacklist', skills: ['keep-skill'], mcps: ['playwright'] },
 })
 
-function makeEnv(opts: { configText?: string } = {}) {
+type Listener = (...args: never[]) => unknown
+
+type TestAgent = ReturnType<ReturnType<typeof makeEnv>['agent']>
+
+function makeEnv(opts: { configText?: string; blockedSkillRegistrations?: string[] } = {}) {
+  const blockedSkillRegistrations = new Set(opts.blockedSkillRegistrations ?? [])
   const state = {
     configText: opts.configText ?? WHITELIST_TEXT,
+    serverTools: [...SERVER_TOOLS],
     written: [] as Array<{ target: string; content: string }>,
+    assemblyCalls: 0,
+    assemblyTerminalCalls: 0,
   }
   const restrictCalls: Array<{ agentId: string; deny: string[]; disposed: boolean }> = []
   const skillRegistrations: Array<{
@@ -48,29 +60,89 @@ function makeEnv(opts: { configText?: string } = {}) {
     skill: typeof SKILLS[number]
     disposed: boolean
   }> = []
-  const listeners: Array<{ fn: (...args: never[]) => unknown }> = []
+  const listeners: Record<string, Listener[]> = {}
+  const agentMap = new Map<string, ReturnType<typeof createAgent>>()
   let routeHandler: ((req: unknown, res: unknown) => Promise<void>) | null = null
 
-  const agent = (id: string) => ({
-    id,
-    session: { header: { cwd: '/ws' } },
-    ctx: {
-      tools: {
-        restrict: (filter: { deny: string[] }): (() => void) => {
-          const call = { agentId: id, deny: [...filter.deny], disposed: false }
-          restrictCalls.push(call)
-          return () => { call.disposed = true }
+  const signal = { throwIfAborted() {} }
+
+  function createAgent(id: string) {
+    return {
+      id,
+      session: { header: { cwd: '/ws' } },
+      ctx: {
+        tools: {
+          restrict: (filter: { deny: string[] }): (() => void) => {
+            const call = { agentId: id, deny: [...filter.deny], disposed: false }
+            restrictCalls.push(call)
+            return () => { call.disposed = true }
+          },
+        },
+        skills: {
+          register: (skill: typeof SKILLS[number]): (() => void) => {
+            if (blockedSkillRegistrations.has(skill.name)) return () => {}
+            const call = { agentId: id, skill, disposed: false }
+            skillRegistrations.push(call)
+            return () => { call.disposed = true }
+          },
         },
       },
-      skills: {
-        register: (skill: typeof SKILLS[number]): (() => void) => {
-          const call = { agentId: id, skill, disposed: false }
-          skillRegistrations.push(call)
-          return () => { call.disposed = true }
-        },
-      },
+    }
+  }
+
+  const agent = (id: string) => {
+    let found = agentMap.get(id)
+    if (found === undefined) {
+      found = createAgent(id)
+      agentMap.set(id, found)
+    }
+    return found
+  }
+
+  function visibleSkills(scope: { id?: string } | undefined) {
+    return SKILLS.map((skill) => {
+      if (scope?.id === undefined) return skill
+      return [...skillRegistrations].reverse().find((entry) =>
+        entry.agentId === scope.id && !entry.disposed && entry.skill.name === skill.name,
+      )?.skill ?? skill
+    })
+  }
+
+  function visibleTools(agentId: string | undefined): string[] {
+    if (agentId === undefined) return [...state.serverTools]
+    const denied = new Set(
+      restrictCalls
+        .filter((call) => call.agentId === agentId && !call.disposed)
+        .flatMap((call) => call.deny),
+    )
+    return state.serverTools.filter((name) => !denied.has(name))
+  }
+
+  async function dispatchWaterfall<T>(
+    name: string,
+    args: unknown[],
+    terminal: () => Promise<T> | T,
+  ): Promise<T> {
+    const cbs = [...(listeners[name] ?? [])]
+    const next = (): Promise<T> => {
+      const cb = cbs.shift()
+      return cb === undefined
+        ? Promise.resolve(terminal())
+        : Promise.resolve((cb as (...values: unknown[]) => T | Promise<T>)(...args, next))
+    }
+    return next()
+  }
+
+  const systemPrompt = {
+    assemble: async (context: { agent?: TestAgent; signal?: unknown } = {}) => {
+      state.assemblyCalls += 1
+      const assembly = { tools: visibleTools(context.agent?.id).map((name) => ({ name })) }
+      return dispatchWaterfall('system-prompt/assemble', [assembly, context], () => {
+        state.assemblyTerminalCalls += 1
+        return assembly
+      })
     },
-  })
+  }
 
   const webServer = {
     register: (route: { handler: (req: unknown, res: unknown) => Promise<void> }): (() => void) => {
@@ -83,13 +155,20 @@ function makeEnv(opts: { configText?: string } = {}) {
     get: (name: string): unknown => {
       if (name === 'webServer') return webServer
       if (name === 'agents') return { get: (id: string) => agent(id) }
+      if (name === 'systemPrompt') return systemPrompt
       if (name === 'skills') {
         return {
-          snapshot: async () => ({ skills: SKILLS, complete: true }),
-          get: async (skillName: string) => SKILLS.find((skill) => skill.name === skillName),
+          snapshot: async (options: { scope?: { id?: string } } = {}) => ({
+            skills: visibleSkills(options.scope),
+            complete: true,
+          }),
+          get: async (skillName: string, options: { scope?: { id?: string } } = {}) =>
+            visibleSkills(options.scope).find((skill) => skill.name === skillName),
         }
       }
-      if (name === 'tools') return { schemas: () => SERVERS.map((toolName) => ({ name: toolName })) }
+      if (name === 'tools') {
+        return { schemas: () => state.serverTools.map((toolName) => ({ name: toolName })) }
+      }
       if (name === 'fs') {
         return {
           resolve: async (path: string): Promise<string> => path,
@@ -103,10 +182,11 @@ function makeEnv(opts: { configText?: string } = {}) {
       return undefined
     },
     effect: (cb: () => void): (() => void) => { cb(); return () => {} },
-    on: (name: string, fn: (...args: never[]) => unknown): (() => boolean) => {
-      if (name === 'agent/pre-step') listeners.push({ fn })
+    on: (name: string, fn: Listener): (() => boolean) => {
+      ;(listeners[name] ??= []).push(fn)
       return () => true
     },
+    logger: { warn() {} },
   }
 
   return {
@@ -114,18 +194,29 @@ function makeEnv(opts: { configText?: string } = {}) {
     agent,
     listeners,
     state,
+    signal,
+    systemPrompt,
     restrictCalls,
     skillRegistrations,
     routeHandler: () => routeHandler,
   }
 }
 
+async function dispatchEvent(
+  listeners: Record<string, Listener[]>,
+  name: string,
+  payload?: Record<string, unknown>,
+): Promise<void> {
+  await Promise.all((listeners[name] ?? []).map((fn) =>
+    Promise.resolve((fn as (...args: unknown[]) => unknown)(payload))))
+}
+
 async function dispatchPreStep(
-  listeners: Array<{ fn: (...args: never[]) => unknown }>,
+  listeners: Record<string, Listener[]>,
   payload: Record<string, unknown>,
   terminal: { kind: string } = { kind: 'enter' },
 ): Promise<unknown> {
-  const cbs = listeners.map((listener) => listener.fn)
+  const cbs = [...(listeners['agent/pre-step'] ?? [])]
   const next = (): unknown => {
     const cb = cbs.shift()
     return cb === undefined ? terminal : (cb as (...args: unknown[]) => unknown)(payload, next)
@@ -133,7 +224,7 @@ async function dispatchPreStep(
   return next()
 }
 
-function payloadOf(agent: ReturnType<ReturnType<typeof makeEnv>['agent']>): Record<string, unknown> {
+function payloadOf(agent: TestAgent): Record<string, unknown> {
   return {
     agent,
     messages: [],
@@ -222,56 +313,84 @@ describe('workspace-scope host behavior', () => {
     expect(missing.statusCode).toBe(404)
   })
 
-  it('uses native scoped Skill shadows and MCP restrict, locked per conversation', async () => {
+  it('locks config on the first turn assembly and keeps Skill shadows across steps', async () => {
     const env = makeEnv()
     apply(env.ctx as never)
-
     const first = env.agent('a1')
-    await dispatchPreStep(env.listeners, payloadOf(first))
 
+    // Agent-scoped diagnostics have no turn signal and must not lock the blank session.
+    await env.systemPrompt.assemble({ agent: first })
+    expect(env.restrictCalls).toHaveLength(0)
+
+    const assembly = await env.systemPrompt.assemble({ agent: first, signal: env.signal })
+    expect(assembly.tools.map((tool) => tool.name)).toEqual([
+      'mcp__playwright__navigate',
+      'mcp__playwright__click',
+    ])
+    expect(env.restrictCalls).toEqual([
+      { agentId: 'a1', deny: ['mcp__github__list'], disposed: false },
+    ])
+    // The outer pre-policy assembly is discarded; downstream sees only the rebuild.
+    expect(env.state.assemblyTerminalCalls).toBe(2)
+
+    await dispatchPreStep(env.listeners, payloadOf(first))
     expect(env.skillRegistrations).toHaveLength(1)
-    expect(env.skillRegistrations[0]!.agentId).toBe('a1')
     expect(env.skillRegistrations[0]!.skill.name).toBe('drop-skill')
     expect(env.skillRegistrations[0]!.skill.invocation).toEqual({
       modelInvocable: false,
       userInvocable: true,
     })
-    expect(env.restrictCalls).toEqual([
-      { agentId: 'a1', deny: ['mcp__github__list'], disposed: false },
-    ])
 
     env.state.configText = BLACKLIST_TEXT
     await dispatchPreStep(env.listeners, payloadOf(first))
     expect(env.skillRegistrations).toHaveLength(2)
     expect(env.skillRegistrations[0]!.disposed).toBe(true)
     expect(env.skillRegistrations[1]!.skill.name).toBe('drop-skill')
-    expect(env.restrictCalls).toHaveLength(2)
-    expect(env.restrictCalls[0]!.disposed).toBe(true)
-    expect(env.restrictCalls[1]!.deny).toEqual(['mcp__github__list'])
+    expect(env.restrictCalls).toHaveLength(1)
 
     const second = env.agent('a2')
-    await dispatchPreStep(env.listeners, payloadOf(second))
-    expect(env.skillRegistrations).toHaveLength(3)
-    expect(env.skillRegistrations[2]!.skill.name).toBe('keep-skill')
-    expect(env.restrictCalls[2]!.deny).toEqual([
-      'mcp__playwright__navigate',
+    await env.systemPrompt.assemble({ agent: second, signal: env.signal })
+    expect(env.restrictCalls[1]!.deny).toEqual([
       'mcp__playwright__click',
+      'mcp__playwright__navigate',
     ])
+    await dispatchPreStep(env.listeners, payloadOf(second))
+    expect(env.skillRegistrations[2]!.skill.name).toBe('keep-skill')
   })
 
-  it('rolls back a provisional scope when the first pre-step is rejected', async () => {
+  it('fails closed when a same-layer runtime Skill prevents the deny shadow from winning', async () => {
+    const env = makeEnv({ blockedSkillRegistrations: ['drop-skill'] })
+    apply(env.ctx as never)
+    const agent = env.agent('a1')
+
+    await env.systemPrompt.assemble({ agent, signal: env.signal })
+    await expect(dispatchPreStep(env.listeners, payloadOf(agent)))
+      .rejects.toThrow('failed to hide skill "drop-skill"')
+  })
+
+  it('reassembles only when the effective denied MCP set changes', async () => {
     const env = makeEnv()
     apply(env.ctx as never)
     const first = env.agent('a1')
 
-    const rejected = await dispatchPreStep(env.listeners, payloadOf(first), { kind: 'reject' })
-    expect(rejected).toEqual({ kind: 'reject' })
-    expect(env.skillRegistrations[0]!.disposed).toBe(true)
-    expect(env.restrictCalls[0]!.disposed).toBe(true)
+    await env.systemPrompt.assemble({ agent: first, signal: env.signal })
+    expect(env.restrictCalls).toHaveLength(1)
 
-    env.state.configText = BLACKLIST_TEXT
-    await dispatchPreStep(env.listeners, payloadOf(first))
-    expect(env.skillRegistrations).toHaveLength(2)
-    expect(env.skillRegistrations[1]!.skill.name).toBe('keep-skill')
+    env.state.serverTools.push('mcp__github__create')
+    const changed = await env.systemPrompt.assemble({ agent: first, signal: env.signal })
+    expect(changed.tools.map((tool) => tool.name)).toEqual([
+      'mcp__playwright__navigate',
+      'mcp__playwright__click',
+    ])
+    expect(env.restrictCalls).toHaveLength(2)
+    expect(env.restrictCalls[0]!.disposed).toBe(true)
+    expect(env.restrictCalls[1]!.deny).toEqual([
+      'mcp__github__create',
+      'mcp__github__list',
+    ])
+
+    await env.systemPrompt.assemble({ agent: first, signal: env.signal })
+    expect(env.restrictCalls).toHaveLength(2)
+    expect(env.skillRegistrations).toHaveLength(0)
   })
 })
