@@ -2,9 +2,10 @@
  * dsh-workspace-scope — Host half.
  *
  * A workspace-local policy decides which Skills and MCP servers a new
- * conversation exposes to the model. Skill policy is expressed through DSH's
- * scoped SkillRegistry; MCP policy uses the scoped ToolRuntime restriction.
- * User-explicit /<skill> invocation keeps the skill's original user policy.
+ * conversation exposes to the model. Skill capability policy is expressed
+ * through DSH's scoped SkillRegistry; MCP tool policy uses the scoped
+ * ToolRuntime restriction. User-explicit /<skill> invocation keeps the
+ * skill's original user policy.
  */
 
 import type { Context } from "@deepseek-ai/cordis";
@@ -236,7 +237,7 @@ export function apply(ctx: Context): void {
     }
   }
 
-  async function installAgentScope(
+  async function installCapabilityPolicy(
     agent: AgentLike,
     cfg: ScopeConfig,
     signal: AbortSignal,
@@ -244,6 +245,8 @@ export function apply(ctx: Context): void {
     if (cfg.mode === "default") return () => {};
     const disposers: Array<() => void> = [];
     try {
+      // Skill capability policy: shadow excluded model-visible Skills in the
+      // agent's native SkillRegistry layer while preserving user invocation.
       const skills = ctx.get("skills") as SkillsServiceLike | undefined;
       if (skills !== undefined) {
         const view = { scope: agent, cwd: agent.session.header.cwd, signal };
@@ -277,6 +280,7 @@ export function apply(ctx: Context): void {
         }
       }
 
+      // MCP tool policy: use DSH's native scoped tool restriction directly.
       const byServer = serverToolsMap();
       const deniedMcp = deniedServers(cfg, [...byServer.keys()]).flatMap(
         (server) => byServer.get(server) ?? [],
@@ -296,15 +300,16 @@ export function apply(ctx: Context): void {
     }
   }
 
-  const activeScopes = new Map<string, () => void>();
+  const activePolicies = new Map<string, () => void>();
   const onEvent = ctx.on as unknown as (
     name: string,
     listener: (...args: never[]) => unknown,
+    options?: boolean | { prepend?: boolean },
   ) => unknown;
 
   onEvent("agent/disposed", (agent: AgentLike) => {
-    activeScopes.get(agent.id)?.();
-    activeScopes.delete(agent.id);
+    activePolicies.get(agent.id)?.();
+    activePolicies.delete(agent.id);
   });
 
   onEvent(
@@ -313,23 +318,24 @@ export function apply(ctx: Context): void {
       payload: { agent: AgentLike; signal: AbortSignal },
       next: () => Promise<{ kind: string; messages?: Array<Record<string, unknown>> }>,
     ): Promise<{ kind: string; messages?: Array<Record<string, unknown>> }> => {
-      if (activeScopes.has(payload.agent.id)) return next();
+      if (activePolicies.has(payload.agent.id)) return next();
       const cfg = await readConfig(payload.agent.session.header.cwd);
       payload.signal.throwIfAborted();
-      const dispose = await installAgentScope(payload.agent, cfg, payload.signal);
+      const dispose = await installCapabilityPolicy(payload.agent, cfg, payload.signal);
       try {
         const decision = await next();
         if (decision.kind === "reject") {
           dispose();
           return decision;
         }
-        activeScopes.set(payload.agent.id, dispose);
+        activePolicies.set(payload.agent.id, dispose);
         return decision;
       } catch (err) {
         dispose();
         throw err;
       }
     },
+    { prepend: true },
   );
 
   async function overviewResult(sessionId: string): Promise<Record<string, unknown>> {
@@ -340,9 +346,12 @@ export function apply(ctx: Context): void {
     if (skills !== undefined) {
       try {
         const snapshot = await skills.snapshot(agent === undefined ? { cwd } : { scope: agent, cwd });
-        skillList = snapshot.skills
-          .filter((skill) => skill.invocation?.modelInvocable !== false)
-          .map((skill) => ({ name: skill.name, description: skill.description ?? "" }));
+        // The management UI inventories every discovered Skill. The local
+        // .dsh-scope.json config supplies the switch state independently.
+        skillList = snapshot.skills.map((skill) => ({
+          name: skill.name,
+          description: skill.description ?? "",
+        }));
       } catch {
         // An unavailable provider should not break the management UI.
       }
