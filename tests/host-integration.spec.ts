@@ -242,14 +242,18 @@ describe('workspace-scope host behavior', () => {
 
     env.state.configText = BLACKLIST_TEXT
     await dispatchPreStep(env.listeners, payloadOf(first))
-    expect(env.skillRegistrations).toHaveLength(1)
-    expect(env.restrictCalls).toHaveLength(1)
+    expect(env.skillRegistrations).toHaveLength(2)
+    expect(env.skillRegistrations[0]!.disposed).toBe(true)
+    expect(env.skillRegistrations[1]!.skill.name).toBe('drop-skill')
+    expect(env.restrictCalls).toHaveLength(2)
+    expect(env.restrictCalls[0]!.disposed).toBe(true)
+    expect(env.restrictCalls[1]!.deny).toEqual(['mcp__github__list'])
 
     const second = env.agent('a2')
     await dispatchPreStep(env.listeners, payloadOf(second))
-    expect(env.skillRegistrations).toHaveLength(2)
-    expect(env.skillRegistrations[1]!.skill.name).toBe('keep-skill')
-    expect(env.restrictCalls[1]!.deny).toEqual([
+    expect(env.skillRegistrations).toHaveLength(3)
+    expect(env.skillRegistrations[2]!.skill.name).toBe('keep-skill')
+    expect(env.restrictCalls[2]!.deny).toEqual([
       'mcp__playwright__navigate',
       'mcp__playwright__click',
     ])

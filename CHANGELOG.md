@@ -11,12 +11,14 @@ All notable changes to this project are documented in this file. The format is b
 - MCP scoping continues to use the native scoped `tools.restrict()` path and is explicitly limited to Host-global MCP tools inherited by the Agent; Agent/Preset-scoped MCP registrations stay outside this plugin's management boundary.
 - The capability-policy `agent/pre-step` listener is explicitly prepended so Skill and global MCP policy are installed before downstream pre-step consumers run.
 - The workspace config is locked only after the first pre-step is accepted. A rejected or failed first pre-step rolls back the provisional scoped registrations and can retry with the latest workspace config.
-- Saving `.dsh-scope.json` no longer mutates a fresh agent immediately; the policy is installed once at conversation start.
+- Saving `.dsh-scope.json` no longer mutates a fresh agent immediately. After the config is locked, each later pre-step reconciles the scoped policy against DSH's current Skill and global MCP registries without rereading the file.
 - The management overview inventories every discovered Skill and Host-global MCP server; `.dsh-scope.json` independently supplies each row's enabled/disabled switch state, so an existing capability remains visible in the UI even when it is excluded from model use.
 
 ### Fixed
 - Plugin unload/HMR now disposes capability policies previously installed into live Agent scopes, preventing stale Skill shadows or MCP restrictions from surviving a reload.
 - Workspace config writes are serialized so rapid autosaves cannot complete out of order and roll `.dsh-scope.json` back to an older switch state.
+- Agent disposal now consumes DSH's `{ agent }` event payload correctly, so a resumed/recreated Agent with the same session id does not inherit a stale `activePolicies` entry.
+- Locked workspace policy is rebuilt from the current registries before later model steps, so Skill hot-refresh and Host-global MCP reconnect/list changes cannot expose newly appeared excluded capabilities.
 
 ### Removed
 - Removed the custom `skill-catalog` message renderer/filter, the full-`source.entries` digest workaround, and the extra `tools/pre-execute` Skill deny guard.

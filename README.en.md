@@ -16,14 +16,14 @@ MCP scope here explicitly means Host-global MCP tools inherited by an Agent. MCP
 
 The entry lives on the new-session screen: the "Workspace scope" button in the tool row of the input card. Ongoing conversations do not show it, since the scope is fixed once a conversation starts and only affects sessions created later.
 
-The dialog lists all manageable entries under two groups, Skills and MCP servers, and each group heading can be collapsed on its own:
+The dialog lists all manageable entries under two groups, Skills and global MCP servers, and each group heading can be collapsed on its own:
 
 - A search box filters the entries
 - Each row has a switch; on means enabled
-- Clicking the row expands details (description for skills, tool count for MCP servers)
+- Clicking the row expands details (description for skills, tool count for global MCP servers)
 - Enable all / disable all quick buttons at the bottom; every change saves immediately
 
-Saving writes the config to `.dsh-scope.json` in the workspace root and only affects sessions created later in that workspace. Once a conversation starts, its config is fixed; changing it mid-conversation does not affect that conversation. Excluded skills that remain user-invocable can still be loaded ad hoc with the `/skill-name` gesture.
+Saving writes the config to `.dsh-scope.json` in the workspace root and only affects sessions created later in that workspace. Once a conversation starts, its config values are locked; changing the file mid-conversation does not alter that conversation. Before each later model step, the plugin reconciles that locked config against DSH's current Skill and Host-global MCP registries, so Skill hot refresh and MCP reconnect/tool-list changes remain subject to the same workspace policy. Excluded skills that remain user-invocable can still be loaded ad hoc with the `/skill-name` gesture.
 
 ## Configuration
 
@@ -54,11 +54,14 @@ flowchart LR
     C --> D[.dsh-scope.json<br/>workspace root]
     E[First pre-step of a new session] --> F[Read and lock config]
     D --> F
-    F --> G[Agent Skill scope<br/>excluded: modelInvocable=false]
-    F --> H[Agent Tool scope<br/>tools.restrict global MCP]
-    G --> I[Native DSH Skill catalog / skill tool]
-    H --> J[Model-visible tools]
-    K[/skill-name] --> L[Original userInvocable policy preserved]
+    F --> G[Install Agent policy from current registries]
+    M[Later pre-step] --> N[Reuse locked config]
+    N --> G
+    G --> H[Skill shadow<br/>modelInvocable=false]
+    G --> I[tools.restrict<br/>Host-global MCP]
+    H --> J[Native DSH Skill catalog / skill tool]
+    I --> K[Model-visible tools]
+    L[/skill-name] --> O[Original userInvocable policy preserved]
 ```
 
 ## Contributing
