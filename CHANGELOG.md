@@ -4,12 +4,12 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-09-02
+## [0.4.0] - 2026-09-03
 
 ### Changed
 - Skill scoping now uses DSH's native per-agent `SkillRegistry` layers: excluded model-invocable skills are shadowed in the agent scope with `modelInvocable: false` while preserving their original user-invocation policy.
 - MCP scoping continues to use the native scoped `tools.restrict()` path and is explicitly limited to Host-global MCP tools inherited by the Agent; Agent/Preset-scoped MCP registrations stay outside this plugin's management boundary.
-- For DSH 0.1.2-rc.1's assembly-before-pre-step loop, workspace config is read and locked at the first turn-owned `system-prompt/assemble`. Agent-scoped diagnostic assemblies without a turn signal do not lock a blank session.
+- For DSH 0.1.2-rc.1's assembly-before-pre-step loop, workspace config is read and locked at the first turn-owned `system-prompt/assemble`. Agent-scoped diagnostic assemblies without a turn signal do not lock the blank session.
 - MCP policy is reconciled against the current Host-global tool view on each real Agent prompt assembly. When the effective denied tool set changes, the plugin installs the replacement scoped restriction, discards the pre-policy assembly, and asks DSH to assemble once more so native and PTC tool presentation are both generated under the same policy.
 - The prepended `agent/pre-step` listener refreshes only Skill shadows immediately before DSH's `tool-skill` catalog listener. It removes the previous shadows before discovery so the scoped SkillRegistry snapshot sees the underlying winning definitions.
 - The Host declares its actual hard service dependencies: `webServer`, `fs`, `skills`, `tools`, `agents`, and `systemPrompt`; `sandboxPolicy` remains optional.
