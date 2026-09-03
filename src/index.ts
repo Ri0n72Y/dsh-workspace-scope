@@ -1,11 +1,9 @@
 /**
  * dsh-workspace-scope — Host half.
  *
- * A workspace-local policy decides which Skills and Host-global MCP servers a
- * new conversation exposes to the model. Skill capability policy is expressed
- * through DSH's scoped SkillRegistry; global MCP tool policy uses the scoped
- * ToolRuntime restriction. User-explicit /<skill> invocation keeps the
- * skill's original user policy.
+ * Workspace config is locked when an Agent session starts. Host-global MCP
+ * restrictions are installed before the first prompt assembly; Skill shadows
+ * are refreshed at pre-step, immediately before DSH's skill catalog listener.
  */
 
 import type { Context } from "@deepseek-ai/cordis";
@@ -14,7 +12,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 declare const harness: any;
 
 export const name = "dsh-workspace-scope";
-export const inject = ["webServer"];
+export const inject = ["webServer", "fs", "skills", "tools", "agents"];
 
 const CONFIG_FILE = ".dsh-scope.json";
 const ROUTE_PREFIX = "/api/dsh-workspace-scope";
@@ -102,15 +100,19 @@ interface ScopedToolsLike {
 
 interface AgentLike {
   id: string;
+  status: "idle" | "running";
   session: SessionLike;
-  ctx?: {
-    skills?: ScopedSkillsLike;
-    tools?: ScopedToolsLike;
+  ctx: {
+    skills: ScopedSkillsLike;
+    tools: ScopedToolsLike;
   };
+  runMaintenance<T>(job: (signal: AbortSignal) => Promise<T>): Promise<T>;
+  whenIdle(): Promise<void>;
 }
 
 interface AgentsServiceLike {
   get(id: string): AgentLike | undefined;
+  list(): AgentLike[];
 }
 
 interface ToolsServiceLike {
@@ -150,14 +152,14 @@ export function deniedSkills(cfg: ScopeConfig, allSkills: string[]): string[] {
 }
 
 export function apply(ctx: Context): void {
-  const webServer = ctx.get("webServer") as WebServerLike | undefined;
-  if (webServer === undefined) {
-    throw new Error("dsh-workspace-scope: webServer is unavailable");
-  }
+  const webServer = ctx.get("webServer") as WebServerLike;
+  const fs = ctx.get("fs") as FsServiceLike;
+  const skills = ctx.get("skills") as SkillsServiceLike;
+  const tools = ctx.get("tools") as ToolsServiceLike;
+  const agents = ctx.get("agents") as AgentsServiceLike;
 
   async function readConfig(cwd: string | undefined): Promise<ScopeConfig> {
-    const fs = ctx.get("fs") as FsServiceLike | undefined;
-    if (fs === undefined || cwd === undefined || cwd === "") return { ...DEFAULT_CONFIG };
+    if (cwd === undefined || cwd === "") return { ...DEFAULT_CONFIG };
     try {
       const target = await fs.resolve(`${cwd}/${CONFIG_FILE}`);
       return parseScopeConfig(await fs.readText(target));
@@ -175,8 +177,7 @@ export function apply(ctx: Context): void {
     session: SessionLike | undefined,
   ): Promise<{ saved: boolean; reason?: string }> {
     const write = configWriteQueue.then(async () => {
-      const fs = ctx.get("fs") as FsServiceLike | undefined;
-      if (fs === undefined || cwd === undefined || cwd === "") {
+      if (cwd === undefined || cwd === "") {
         return { saved: false, reason: "无法确定工作目录，未保存" };
       }
       try {
@@ -216,21 +217,17 @@ export function apply(ctx: Context): void {
   }
 
   function resolveAgent(sessionId: string): AgentLike | undefined {
-    if (sessionId === "") return undefined;
-    return (ctx.get("agents") as AgentsServiceLike | undefined)?.get(sessionId);
+    return sessionId === "" ? undefined : agents.get(sessionId);
   }
 
   function globalMcpToolsMap(): Map<string, string[]> {
     const byServer = new Map<string, string[]>();
-    const tools = ctx.get("tools") as ToolsServiceLike | undefined;
-    // No scope argument means the Host-global ToolRuntime view. Agent/Preset
-    // scoped MCP registrations are intentionally outside this plugin's boundary.
-    // DSH does not currently expose stable MCP ownership metadata on ToolSchema,
-    // so server grouping remains limited to the conventional public-name prefix.
-    for (const schema of tools?.schemas() ?? []) {
-      const match = /^mcp__(.+?)__(.+)$/.exec(schema.name);
+    // DSH 0.1.2-rc.1 validates MCP server names as [A-Za-z0-9_-]{1,32}
+    // and publishes every Host-global MCP tool as mcp__<server>__<tool>.
+    for (const schema of tools.schemas()) {
+      const match = /^mcp__([A-Za-z0-9_-]{1,32})__(.+)$/.exec(schema.name);
       if (match === null) continue;
-      const server = match[1] ?? "";
+      const server = match[1]!;
       const names = byServer.get(server) ?? [];
       if (!byServer.has(server)) byServer.set(server, names);
       names.push(schema.name);
@@ -238,101 +235,143 @@ export function apply(ctx: Context): void {
     return byServer;
   }
 
+  function mcpInventoryKey(byServer: Map<string, string[]>): string {
+    return JSON.stringify([...byServer.values()].flat().sort());
+  }
+
   function disposeAll(disposers: Array<() => void>): void {
     for (const dispose of disposers.reverse()) {
       try {
         dispose();
       } catch {
-        // Cordis effects may already be gone with the owning agent scope.
+        // Agent scope teardown may already have removed the registration.
       }
     }
   }
 
-  async function installCapabilityPolicy(
+  function safeDispose(dispose: (() => void) | undefined): void {
+    if (dispose === undefined) return;
+    try {
+      dispose();
+    } catch {
+      // Agent scope teardown may already have removed the registration.
+    }
+  }
+
+  async function installSkillPolicy(
     agent: AgentLike,
     cfg: ScopeConfig,
     signal: AbortSignal,
-  ): Promise<() => void> {
-    if (cfg.mode === "default") return () => {};
+  ): Promise<(() => void) | undefined> {
+    if (cfg.mode === "default") return undefined;
+    const view = { scope: agent, cwd: agent.session.header.cwd, signal };
+    const snapshot = await skills.snapshot(view);
+    signal.throwIfAborted();
+    if (!snapshot.complete) {
+      throw new Error("dsh-workspace-scope: skill catalog is incomplete");
+    }
+
+    const denied = new Set(deniedSkills(cfg, snapshot.skills.map((skill) => skill.name)));
+    if (denied.size === 0) return undefined;
+
     const disposers: Array<() => void> = [];
     try {
-      // Skill capability policy: shadow excluded model-visible Skills in the
-      // agent's native SkillRegistry layer while preserving user invocation.
-      const skills = ctx.get("skills") as SkillsServiceLike | undefined;
-      if (skills !== undefined) {
-        const view = { scope: agent, cwd: agent.session.header.cwd, signal };
-        const snapshot = await skills.snapshot(view);
+      for (const summary of snapshot.skills) {
+        if (!denied.has(summary.name) || summary.invocation?.modelInvocable === false) continue;
+        const definition = await skills.get(summary.name, view);
         signal.throwIfAborted();
-        if (!snapshot.complete) {
-          throw new Error("dsh-workspace-scope: skill catalog is incomplete");
-        }
-        const denied = new Set(deniedSkills(cfg, snapshot.skills.map((skill) => skill.name)));
-        if (denied.size > 0) {
-          const scopedSkills = agent.ctx?.skills;
-          if (scopedSkills === undefined) {
-            throw new Error("dsh-workspace-scope: scoped skills service is unavailable");
-          }
-          for (const summary of snapshot.skills) {
-            if (!denied.has(summary.name) || summary.invocation?.modelInvocable === false) continue;
-            const definition = await skills.get(summary.name, view);
-            signal.throwIfAborted();
-            if (definition === undefined || definition.invocation?.modelInvocable === false) continue;
-            disposers.push(
-              scopedSkills.register({
-                ...definition,
-                invocation: {
-                  ...definition.invocation,
-                  modelInvocable: false,
-                  userInvocable: definition.invocation?.userInvocable !== false,
-                },
-              }),
-            );
-          }
-        }
+        if (definition === undefined || definition.invocation?.modelInvocable === false) continue;
+        disposers.push(
+          agent.ctx.skills.register({
+            ...definition,
+            invocation: {
+              ...definition.invocation,
+              modelInvocable: false,
+              userInvocable: definition.invocation?.userInvocable !== false,
+            },
+          }),
+        );
       }
-
-      // Host-global MCP policy: restrict only inherited global MCP tools.
-      const byServer = globalMcpToolsMap();
-      const deniedMcp = deniedServers(cfg, [...byServer.keys()]).flatMap(
-        (server) => byServer.get(server) ?? [],
-      );
-      if (deniedMcp.length > 0) {
-        const scopedTools = agent.ctx?.tools;
-        if (scopedTools === undefined) {
-          throw new Error("dsh-workspace-scope: scoped tools service is unavailable");
-        }
-        disposers.push(scopedTools.restrict({ deny: deniedMcp }));
-      }
-
-      return () => disposeAll(disposers);
+      return disposers.length === 0 ? undefined : () => disposeAll(disposers);
     } catch (err) {
       disposeAll(disposers);
       throw err;
     }
   }
 
+  function installMcpPolicy(
+    agent: AgentLike,
+    cfg: ScopeConfig,
+    byServer: Map<string, string[]> = globalMcpToolsMap(),
+  ): (() => void) | undefined {
+    if (cfg.mode === "default") return undefined;
+    const denied = deniedServers(cfg, [...byServer.keys()]).flatMap(
+      (server) => byServer.get(server) ?? [],
+    );
+    return denied.length === 0 ? undefined : agent.ctx.tools.restrict({ deny: denied });
+  }
+
   interface ActivePolicy {
+    agent: AgentLike;
     config: ScopeConfig;
-    dispose?: () => void;
+    skillDispose?: () => void;
+    mcpDispose?: () => void;
   }
 
   const activePolicies = new Map<string, ActivePolicy>();
+  let globalMcpKey = mcpInventoryKey(globalMcpToolsMap());
+
   const onEvent = ctx.on as unknown as (
     name: string,
     listener: (...args: never[]) => unknown,
     options?: boolean | { prepend?: boolean },
   ) => unknown;
 
-  // The registrations live in agent scopes, so plugin unload/HMR must lift
-  // them explicitly while those agents are still alive.
+  async function initializeAgent(agent: AgentLike, signal: AbortSignal): Promise<void> {
+    const cfg = await readConfig(agent.session.header.cwd);
+    signal.throwIfAborted();
+    const mcpDispose = installMcpPolicy(agent, cfg);
+    const previous = activePolicies.get(agent.id);
+    safeDispose(previous?.skillDispose);
+    safeDispose(previous?.mcpDispose);
+    activePolicies.set(agent.id, { agent, config: cfg, mcpDispose });
+  }
+
+  function startAgentPolicy(agent: AgentLike): Promise<void> {
+    return agent.runMaintenance((signal) => initializeAgent(agent, signal));
+  }
+
   ctx.effect(() => () => {
-    for (const policy of activePolicies.values()) policy.dispose?.();
+    for (const policy of activePolicies.values()) {
+      safeDispose(policy.skillDispose);
+      safeDispose(policy.mcpDispose);
+    }
     activePolicies.clear();
   });
 
+  onEvent("agent/session-start", ({ agent }: { agent: AgentLike }) => startAgentPolicy(agent));
+
   onEvent("agent/disposed", ({ agent }: { agent: AgentLike }) => {
-    activePolicies.get(agent.id)?.dispose?.();
+    const policy = activePolicies.get(agent.id);
+    safeDispose(policy?.skillDispose);
+    safeDispose(policy?.mcpDispose);
     activePolicies.delete(agent.id);
+  });
+
+  // Global ToolRuntime changes happen before the next prompt assembly. Refresh
+  // only MCP restrictions; restriction changes themselves keep this key stable,
+  // so their own tools/change notifications terminate here without recursion.
+  onEvent("tools/change", () => {
+    const byServer = globalMcpToolsMap();
+    const nextKey = mcpInventoryKey(byServer);
+    if (nextKey === globalMcpKey) return;
+    globalMcpKey = nextKey;
+    for (const policy of activePolicies.values()) {
+      const next = installMcpPolicy(policy.agent, policy.config, byServer);
+      const previous = policy.mcpDispose;
+      policy.mcpDispose = next;
+      safeDispose(previous);
+    }
   });
 
   onEvent(
@@ -343,57 +382,49 @@ export function apply(ctx: Context): void {
     ): Promise<{ kind: string; messages?: Array<Record<string, unknown>> }> => {
       payload.signal.throwIfAborted();
       const active = activePolicies.get(payload.agent.id);
-      if (active !== undefined) {
-        // The workspace config is locked, while DSH's Skill/MCP registries stay
-        // live. Rebuild the scoped policy from the current registries before
-        // every model step so hot-refresh/reconnect cannot bypass that lock.
-        active.dispose?.();
-        delete active.dispose;
-        active.dispose = await installCapabilityPolicy(
-          payload.agent,
-          active.config,
-          payload.signal,
-        );
-        return next();
+      if (active === undefined) {
+        // Safe failure for a plugin load racing an already-running Agent: never
+        // send the assembly that was built before this workspace policy existed.
+        throw new Error("dsh-workspace-scope: workspace policy is not initialized");
       }
 
-      const cfg = await readConfig(payload.agent.session.header.cwd);
-      payload.signal.throwIfAborted();
-      const dispose = await installCapabilityPolicy(payload.agent, cfg, payload.signal);
-      try {
-        const decision = await next();
-        if (decision.kind === "reject") {
-          dispose();
-          return decision;
-        }
-        activePolicies.set(payload.agent.id, { config: cfg, dispose });
-        return decision;
-      } catch (err) {
-        dispose();
-        throw err;
-      }
+      // tool-skill publishes its catalog later in this same pre-step waterfall,
+      // so refreshing only Skill shadows here still affects the current step.
+      const refreshed = await installSkillPolicy(payload.agent, active.config, payload.signal);
+      const previous = active.skillDispose;
+      active.skillDispose = refreshed;
+      safeDispose(previous);
+      return next();
     },
     { prepend: true },
   );
 
+  // HMR/plugin reload can attach after Agents already exist. Idle Agents are
+  // reserved immediately; running Agents are initialized as soon as they quiesce.
+  for (const agent of agents.list()) {
+    const pending =
+      agent.status === "idle"
+        ? startAgentPolicy(agent)
+        : agent.whenIdle().then(() => startAgentPolicy(agent));
+    void pending.catch((err: unknown) => {
+      ctx.logger.warn(`dsh-workspace-scope: failed to initialize live agent: ${String(err)}`);
+    });
+  }
+
   async function overviewResult(sessionId: string): Promise<Record<string, unknown>> {
     const agent = resolveAgent(sessionId);
     const cwd = agent?.session.header.cwd;
-    const skills = ctx.get("skills") as SkillsServiceLike | undefined;
     let skillList: Array<{ name: string; description: string }> = [];
-    if (skills !== undefined) {
-      try {
-        const snapshot = await skills.snapshot(agent === undefined ? { cwd } : { scope: agent, cwd });
-        // The management UI inventories every discovered Skill. The local
-        // .dsh-scope.json config supplies the switch state independently.
-        skillList = snapshot.skills.map((skill) => ({
-          name: skill.name,
-          description: skill.description ?? "",
-        }));
-      } catch {
-        // An unavailable provider should not break the management UI.
-      }
+    try {
+      const snapshot = await skills.snapshot(agent === undefined ? { cwd } : { scope: agent, cwd });
+      skillList = snapshot.skills.map((skill) => ({
+        name: skill.name,
+        description: skill.description ?? "",
+      }));
+    } catch {
+      // An unavailable provider should not break the management UI.
     }
+
     const byServer = globalMcpToolsMap();
     const mcp = [...byServer.keys()].sort().map((server) => ({
       server,
