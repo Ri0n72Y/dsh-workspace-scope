@@ -305,6 +305,19 @@ export function apply(ctx: Context): void {
           }),
         );
       }
+
+      const verified = await skills.snapshot(view);
+      signal.throwIfAborted();
+      if (!verified.complete) {
+        throw new Error("dsh-workspace-scope: skill catalog is incomplete");
+      }
+      const exposed = verified.skills.find(
+        (skill) => denied.has(skill.name) && skill.invocation?.modelInvocable !== false,
+      );
+      if (exposed !== undefined) {
+        throw new Error(`dsh-workspace-scope: failed to hide skill "${exposed.name}"`);
+      }
+
       return disposers.length === 0 ? undefined : () => disposeAll(disposers);
     } catch (err) {
       disposeAll(disposers);
