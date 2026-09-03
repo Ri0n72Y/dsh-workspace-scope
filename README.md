@@ -4,9 +4,11 @@
 
 ## 插件正在积极开发中，版本更新频繁
 
-DeepSeek Harness 插件：按工作区（工程）启停 Skill 与 MCP。
+DeepSeek Harness 插件：按工作区（工程）启停 Skill 与 Host 全局 MCP。
 
-安装的技能和 MCP 服务器越多，每个新会话的启动上下文就越大。这个插件让每个工程只启用自己需要的部分，效果类似 VS Code 装了多种语言插件，但每个工程只打开用得到的那几个。
+安装的技能和全局 MCP 服务器越多，每个新会话的启动上下文就越大。这个插件让每个工程只启用自己需要的部分，效果类似 VS Code 装了多种语言插件，但每个工程只打开用得到的那几个。
+
+这里的 MCP 范围明确指 Host 全局注册、由 Agent 继承的 MCP 工具；Agent / Preset 自己作用域内注册的 MCP 不由本插件管理。
 
 English version: [README.en.md](README.en.md)
 
@@ -14,7 +16,7 @@ English version: [README.en.md](README.en.md)
 
 入口在新建会话界面：输入卡右侧工具行里的「工作区能力」按钮。已进行的对话不显示入口，配置在对话开始时锁定，只影响该工作区之后新建的会话。
 
-弹窗按「技能」和「MCP 服务器」两个分组列出全部条目，每组标题可以单独折叠：
+弹窗按「技能」和「MCP 服务器」两个分组列出全部可管理条目，每组标题可以单独折叠：
 
 - 搜索框过滤条目
 - 每行一个开关，打开即启用
@@ -41,19 +43,19 @@ English version: [README.en.md](README.en.md)
 |---|---|---|
 | `mode` | `string` | 保存时固定为 `whitelist`；读取兼容 `default`（全部启用）与 `blacklist`（列表为排除集） |
 | `skills` | `string[]` | 启用的技能名列表 |
-| `mcps` | `string[]` | 启用的 MCP 服务器名列表 |
+| `mcps` | `string[]` | 启用的 Host 全局 MCP 服务器名列表 |
 
 ## 数据流
 
 ```mermaid
 flowchart LR
-    A[用户打开弹窗] --> B[勾选启用的 Skill 与 MCP]
+    A[用户打开弹窗] --> B[勾选启用的 Skill 与全局 MCP]
     B --> C[保存]
     C --> D[.dsh-scope.json<br/>工作区根]
     E[新会话首个 pre-step] --> F[读取并锁定配置]
     D --> F
     F --> G[Agent Skill scope<br/>排除项 modelInvocable=false]
-    F --> H[Agent Tool scope<br/>tools.restrict MCP]
+    F --> H[Agent Tool scope<br/>tools.restrict 全局 MCP]
     G --> I[DSH 原生 Skill catalog / skill tool]
     H --> J[模型可见工具]
     K[/技能名] --> L[保留原 userInvocable 策略]
