@@ -45,7 +45,8 @@ type Listener = (...args: never[]) => unknown
 
 type TestAgent = ReturnType<ReturnType<typeof makeEnv>['agent']>
 
-function makeEnv(opts: { configText?: string } = {}) {
+function makeEnv(opts: { configText?: string; blockedSkillRegistrations?: string[] } = {}) {
+  const blockedSkillRegistrations = new Set(opts.blockedSkillRegistrations ?? [])
   const state = {
     configText: opts.configText ?? WHITELIST_TEXT,
     serverTools: [...SERVER_TOOLS],
@@ -79,6 +80,7 @@ function makeEnv(opts: { configText?: string } = {}) {
         },
         skills: {
           register: (skill: typeof SKILLS[number]): (() => void) => {
+            if (blockedSkillRegistrations.has(skill.name)) return () => {}
             const call = { agentId: id, skill, disposed: false }
             skillRegistrations.push(call)
             return () => { call.disposed = true }
@@ -354,6 +356,16 @@ describe('workspace-scope host behavior', () => {
     ])
     await dispatchPreStep(env.listeners, payloadOf(second))
     expect(env.skillRegistrations[2]!.skill.name).toBe('keep-skill')
+  })
+
+  it('fails closed when a same-layer runtime Skill prevents the deny shadow from winning', async () => {
+    const env = makeEnv({ blockedSkillRegistrations: ['drop-skill'] })
+    apply(env.ctx as never)
+    const agent = env.agent('a1')
+
+    await env.systemPrompt.assemble({ agent, signal: env.signal })
+    await expect(dispatchPreStep(env.listeners, payloadOf(agent)))
+      .rejects.toThrow('failed to hide skill "drop-skill"')
   })
 
   it('reassembles only when the effective denied MCP set changes', async () => {
