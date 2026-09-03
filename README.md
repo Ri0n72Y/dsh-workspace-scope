@@ -14,7 +14,7 @@ English version: [README.en.md](README.en.md)
 
 ## 用法
 
-入口在新建会话界面：输入卡右侧工具行里的「工作区能力」按钮。已进行的对话不显示入口，配置在对话开始时锁定，只影响该工作区之后新建的会话。
+入口在新建会话界面：输入卡右侧工具行里的「工作区能力」按钮。已进行的对话不显示入口。配置会在该会话第一次真正开始模型请求时锁定，因此新建界面中的改动仍能作用于即将开始的对话，之后再修改文件不会改变已经锁定的会话。
 
 弹窗按「技能」和「全局 MCP 服务器」两个分组列出全部可管理条目，每组标题可以单独折叠：
 
@@ -23,7 +23,7 @@ English version: [README.en.md](README.en.md)
 - 点行本身展开详情（技能显示描述，全局 MCP 显示工具数量）
 - 底部有「全部启用」「全部禁用」快捷按钮，所有改动即时保存
 
-保存后配置写入当前工作区根目录的 `.dsh-scope.json`，只影响该工作区之后新建的会话。会话启动时插件先锁定配置，并在首个模型上下文组装前应用 Host 全局 MCP 策略；之后每个 pre-step 按同一份锁定配置刷新 Skill，Host 全局 MCP 注册表发生变化时再刷新 MCP 策略。中途修改 `.dsh-scope.json` 不会改变已开始的会话。被排除但原本允许用户调用的技能仍可用 `/技能名` 手势在会话中临时加载。
+保存后配置写入当前工作区根目录的 `.dsh-scope.json`。第一次带模型 turn 的 prompt assembly 会读取并锁定这份配置。若 Host 全局 MCP 的有效排除集合发生变化，插件先更新 Agent 的原生 `tools.restrict()`，再让 DSH 重做一次完整 prompt assembly，所以 native 与 PTC 两种工具呈现都使用同一策略。Skill 在每个 pre-step 根据锁定配置刷新；被排除但原本允许用户调用的技能仍可用 `/技能名` 手势临时加载。
 
 ## 配置
 
@@ -52,14 +52,18 @@ flowchart LR
     A[用户打开弹窗] --> B[勾选启用的 Skill 与全局 MCP]
     B --> C[保存]
     C --> D[.dsh-scope.json<br/>工作区根]
-    E[agent/session-start] --> F[runMaintenance<br/>读取并锁定配置]
+    E[首次真实 system-prompt/assemble] --> F[读取并锁定配置]
     D --> F
-    F --> G[tools.restrict<br/>首个 prompt assembly 前应用 Host 全局 MCP]
-    H[agent/pre-step] --> I[复用锁定配置刷新 Skill shadow]
-    I --> J[DSH 原生 Skill catalog / skill tool]
-    K[tools/change] --> L[Host 全局 MCP inventory 变化]
-    L --> G
-    M[/技能名] --> N[保留原 userInvocable 策略]
+    F --> G[计算 Host 全局 MCP deny set]
+    G --> H{mask 是否变化}
+    H -->|是| I[tools.restrict]
+    I --> J[重做一次完整 assembly]
+    H -->|否| K[沿用当前 assembly]
+    J --> L[模型可见工具 / PTC SDK]
+    K --> L
+    M[agent/pre-step] --> N[刷新 Skill shadow]
+    N --> O[DSH 原生 Skill catalog / skill tool]
+    P[/技能名] --> Q[保留原 userInvocable 策略]
 ```
 
 ## 贡献
