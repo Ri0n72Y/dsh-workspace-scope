@@ -19,6 +19,7 @@ All notable changes to this project are documented in this file. The format is b
 ### Fixed
 - Host-global MCP restrictions no longer arrive one model request late under current DSH. A changed mask forces one complete reassembly before the request reaches the model, including PTC's generated SDK guidance.
 - Excluded Skills remain excluded on second and later steps. Previously a refresh could snapshot the plugin's own `modelInvocable: false` shadow, skip rebuilding it, then dispose that shadow and expose the underlying Skill to the same step's catalog.
+- Skill shadow installation now verifies the post-registration scoped catalog and fails the pre-step closed if DSH's same-layer runtime first-wins rule prevents the deny shadow from winning, so an excluded Skill cannot silently remain model-invocable.
 - Plugin unload disposes capability policies previously installed into live Agent scopes, preventing stale Skill shadows or MCP restrictions from surviving the plugin instance.
 - Workspace config writes are serialized so rapid autosaves cannot complete out of order and roll `.dsh-scope.json` back to an older switch state.
 - Agent disposal consumes DSH's `{ agent }` event payload correctly, so a resumed/recreated Agent with the same session id does not inherit a stale `activePolicies` entry.
