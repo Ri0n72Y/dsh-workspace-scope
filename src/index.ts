@@ -435,10 +435,12 @@ export function apply(ctx: Context): void {
     if (agent !== undefined) {
       try {
         const snapshot = await skills.snapshot({ scope: agent, cwd });
-        skillList = snapshot.skills.map((skill) => ({
-          name: skill.name,
-          description: skill.description ?? "",
-        }));
+        skillList = snapshot.skills
+          .filter((skill) => skill.invocation?.modelInvocable !== false)
+          .map((skill) => ({
+            name: skill.name,
+            description: skill.description ?? "",
+          }));
       } catch {
         // An unavailable provider should not break the management UI.
       }
