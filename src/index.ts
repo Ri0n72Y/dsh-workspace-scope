@@ -233,8 +233,8 @@ export function apply(ctx: Context): void {
 
   function globalMcpToolsMap(): Map<string, string[]> {
     const byServer = new Map<string, string[]>();
-    // DSH 0.1.2-rc.1 validates MCP server names as [A-Za-z0-9_-]{1,32}
-    // and publishes every Host-global MCP tool as mcp__<server>__<tool>.
+    // DSH publishes Host-global MCP tools as mcp__<server>__<tool> and validates
+    // server names as [A-Za-z0-9_-]{1,32}, so this split is unambiguous.
     for (const schema of tools.schemas()) {
       const match = /^mcp__([A-Za-z0-9_-]{1,32})__(.+)$/.exec(schema.name);
       if (match === null) continue;
@@ -432,14 +432,16 @@ export function apply(ctx: Context): void {
     const agent = resolveAgent(sessionId);
     const cwd = agent?.session.header.cwd;
     let skillList: Array<{ name: string; description: string }> = [];
-    try {
-      const snapshot = await skills.snapshot(agent === undefined ? { cwd } : { scope: agent, cwd });
-      skillList = snapshot.skills.map((skill) => ({
-        name: skill.name,
-        description: skill.description ?? "",
-      }));
-    } catch {
-      // An unavailable provider should not break the management UI.
+    if (agent !== undefined) {
+      try {
+        const snapshot = await skills.snapshot({ scope: agent, cwd });
+        skillList = snapshot.skills.map((skill) => ({
+          name: skill.name,
+          description: skill.description ?? "",
+        }));
+      } catch {
+        // An unavailable provider should not break the management UI.
+      }
     }
 
     const byServer = globalMcpToolsMap();
