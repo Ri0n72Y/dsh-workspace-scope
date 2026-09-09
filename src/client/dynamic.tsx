@@ -3,12 +3,10 @@
 /**
  * dsh-workspace-scope — Client half (TSX).
  *
- * 按工作区（工程）启停 Skill 与 Host 全局 MCP。入口只在新建会话界面（hero）：
- * 输入卡右侧工具行（conversation.input.right）的紧凑 chip；已进行的
- * 对话不显示入口（配置在会话开始时锁定，修改只影响该工作区的新对话）。
- * 弹窗样式参考「设置 → 插件」页（搜索框 + 分组计数 + 卡片网格）。
- * Skill 与 Host 全局 MCP 全部可管理条目始终展示，勾选即启用（白名单语义），
- * 提供 全部启用 / 全部禁用 快捷按钮，改动即时保存。配置只影响新对话开场。
+ * 按工作区（工程）限制当前 Agent Skill 与 Host 全局 MCP。入口只在空白
+ * Session：输入卡右侧工具行（conversation.input.right）的紧凑 chip；
+ * 已进行的对话不显示入口（配置在会话开始时锁定）。Skill inventory
+ * 始终来自当前 live Agent 的 scoped DSH SkillRegistry view。
  *
  * 数据通道双环境：动态（plugin-dev-loop）client 沙箱禁止 fetch，走
  * host.call；静态 bundle 走 /api/dsh-workspace-scope 路由。
@@ -306,7 +304,7 @@ function ScopeBar(props: DockProps): React.ReactElement | null {
       className="wsc-chip"
       onClick={() => setModalFn(!open)}
       aria-expanded={open}
-      title="按工作区配置新对话启用的 Skill 与 Host 全局 MCP"
+      title="按工作区限制当前 Agent 的 Skill 与 Host 全局 MCP"
     >
       <PresetIcon className="wsc-seat-icon" />
       <span>工作区能力</span>
@@ -340,29 +338,38 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
           | string
           | undefined)
       : undefined;
+  const agentPreset =
+    props.useSessions !== undefined
+      ? (props.useSessions((s: any) => {
+          if (!s.current) return undefined;
+          return s.byId[s.current]?.projectionValues?.agentPreset as string | undefined;
+        }) as string | undefined)
+      : undefined;
+  const viewKey = `${sessionId ?? ""}\n${agentPreset ?? ""}`;
 
-  // Latest session id, readable inside async continuations. The modal can
-  // stay open while the user switches sessions; a response that arrives for
-  // a superseded session must be dropped (stale-response race), otherwise a
-  // later save() could write one workspace's config into another's.
+  // A preset switch can re-parent the same blank Agent without changing its
+  // session id. Track both identities so an overview from the old scope cannot
+  // replace the new Agent-scoped inventory after the recompose completes.
+  const viewKeyRef = React.useRef(viewKey);
   const sessionIdRef = React.useRef(sessionId);
   React.useEffect(() => {
+    viewKeyRef.current = viewKey;
     sessionIdRef.current = sessionId;
-  }, [sessionId]);
+  }, [viewKey, sessionId]);
 
   const load = React.useCallback((): void => {
     if (!sessionId) return;
     setError(null);
-    // Capture the requested session; discard the response when the session
-    // changed while the request was in flight.
-    const requested = sessionId;
-    callHost("overview", { sessionId: requested })
+    const requestedSession = sessionId;
+    const requestedView = viewKey;
+    callHost("overview", { sessionId: requestedSession })
       .then((value) => {
-        if (requested !== sessionIdRef.current) return;
+        if (requestedView !== viewKeyRef.current) return;
         const v = value as OverviewData;
         setData(v);
-        // Present the enabled set for the saved mode; legacy/default configs
-        // read as fully enabled (whitelist semantics is the single model).
+        // Keep every saved whitelist entry in the draft, including names the
+        // current Agent does not expose. The UI projects only v.skills, while
+        // future preset switches may make those retained entries relevant.
         const cfg = v.config ?? {};
         const mode = cfg.mode ?? "default";
         const allSkills = (v.skills ?? []).map((s) => s.name);
@@ -385,10 +392,10 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
         });
       })
       .catch((err: unknown) => {
-        if (requested !== sessionIdRef.current) return;
+        if (requestedView !== viewKeyRef.current) return;
         setError(String((err && (err as Error).message) || err));
       });
-  }, [sessionId]);
+  }, [sessionId, viewKey]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -397,7 +404,7 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
     load();
   }, [open, load]);
 
-  // Switching sessions while the modal is open must not show stale data.
+  // Session or preset changes replace the projected Agent capability view.
   React.useEffect(() => {
     setData(null);
     setDraft(null);
@@ -406,7 +413,7 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
     setExpanded(null);
     setCollapsed({ skills: false, mcps: false });
     setQuery("");
-  }, [sessionId]);
+  }, [sessionId, agentPreset]);
 
   // Esc closes the modal; Tab stays inside the dialog (focus trap).
   React.useEffect(() => {
@@ -533,8 +540,8 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
   const allEnabled = (): void => {
     if (draft === null) return;
     applyDraft({
-      // Union with the saved set: never drop whitelist entries that are
-      // outside the (possibly global) overview snapshot.
+      // Bulk operations touch only the current inventory. Hidden entries from
+      // another preset remain in the persisted whitelist.
       ...draft,
       skills: new Set([...draft.skills, ...skills.map((s) => s.name)]),
       mcps: new Set([...draft.mcps, ...mcps.map((m) => m.server)]),
@@ -542,10 +549,12 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
   };
   const allDisabled = (): void => {
     if (draft === null) return;
+    const currentSkills = new Set(skills.map((s) => s.name));
+    const currentMcps = new Set(mcps.map((m) => m.server));
     applyDraft({
       ...draft,
-      skills: new Set<string>(),
-      mcps: new Set<string>(),
+      skills: new Set([...draft.skills].filter((name) => !currentSkills.has(name))),
+      mcps: new Set([...draft.mcps].filter((name) => !currentMcps.has(name))),
     });
   };
 
@@ -595,17 +604,12 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
                 <dt>状态</dt>
                 <dd>{enabled ? "已启用" : "已禁用"}</dd>
               </div>
-              {kind === "skill" ? (
-                <div>
-                  <dt>加载</dt>
-                  <dd>会话中可用 /{name} 临时加载</dd>
-                </div>
-              ) : (
+              {kind === "mcp" ? (
                 <div>
                   <dt>类型</dt>
                   <dd>Host 全局 MCP 服务器</dd>
                 </div>
-              )}
+              ) : null}
             </dl>
           </div>
         ) : null}
@@ -624,9 +628,9 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
     ) : (
       <div className="wsc-body">
         <p className="wsc-desc">
-          仅对新对话开场生效：本配置决定新对话开始时注入的技能与
-          Host 全局 MCP，已进行的对话不受影响。不影响 /&lt;技能名&gt;
-          手势：对话中随时可用。改动即时保存。
+          仅显示当前 Agent 已提供的技能，并对这些技能和 Host 全局 MCP
+          应用工作区策略。切换 Agent Preset 后技能列表会同步更新；改动即时保存，
+          只影响该工作区之后开始的新对话。
         </p>
         <label className="wsc-search">
           <SearchIcon />
@@ -765,9 +769,7 @@ export function apply(ctx: any): void {
     | undefined;
   if (slots === undefined) return;
 
-  // Entry: compact chip in the hero composer tool row (new-session screen).
-  // The scope shapes startup context, so there is no seat in ongoing
-  // conversations.
+  // Entry: compact chip in the blank-session composer tool row.
   slots.inject("conversation.input.right", () =>
     slots.register(
       {
