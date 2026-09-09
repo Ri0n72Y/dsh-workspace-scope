@@ -239,13 +239,21 @@ interface OverviewData {
   config: { mode?: string; skills?: string[]; mcps?: string[] };
 }
 
+type ScopeMode = "default" | "whitelist" | "blacklist";
+
 interface ScopeDraft {
+  mode: ScopeMode;
   skills: Set<string>;
   mcps: Set<string>;
 }
 
 interface DockProps {
   useSessions?: (sel: (s: any) => any) => any;
+}
+
+function policyEnabled(mode: ScopeMode, listed: Set<string>, name: string): boolean {
+  if (mode === "default") return true;
+  return mode === "whitelist" ? listed.has(name) : !listed.has(name);
 }
 
 // ── switch ──────────────────────────────────────────────────────────────────
@@ -365,28 +373,18 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
         if (requestedView !== viewKeyRef.current) return;
         const v = value as OverviewData;
         setData(v);
-        // Keep every saved whitelist entry in the draft, including names the
-        // current Agent does not expose. The UI projects only v.skills, while
-        // future preset switches may make those retained entries relevant.
+        // Preserve the document's list semantics directly. Hidden entries stay
+        // in the list for other presets instead of being projected into the
+        // current Agent's enabled set and then lost on autosave.
         const cfg = v.config ?? {};
-        const mode = cfg.mode ?? "default";
-        const allSkills = (v.skills ?? []).map((s) => s.name);
-        const allMcps = (v.mcp ?? []).map((m) => m.server);
-        const savedSkills = new Set(cfg.skills ?? []);
-        const savedMcps = new Set(cfg.mcps ?? []);
+        const mode: ScopeMode =
+          cfg.mode === "whitelist" || cfg.mode === "blacklist"
+            ? cfg.mode
+            : "default";
         setDraft({
-          skills:
-            mode === "whitelist"
-              ? savedSkills
-              : mode === "blacklist"
-                ? new Set(allSkills.filter((n) => !savedSkills.has(n)))
-                : new Set(allSkills),
-          mcps:
-            mode === "whitelist"
-              ? savedMcps
-              : mode === "blacklist"
-                ? new Set(allMcps.filter((n) => !savedMcps.has(n)))
-                : new Set(allMcps),
+          mode,
+          skills: new Set(cfg.skills ?? []),
+          mcps: new Set(cfg.mcps ?? []),
         });
       })
       .catch((err: unknown) => {
@@ -462,7 +460,7 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
       const requested = sessionId;
       callHost("save", {
         sessionId: requested,
-        mode: "whitelist",
+        mode: next.mode,
         skills: [...next.skills],
         mcps: [...next.mcps],
       })
@@ -496,8 +494,6 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
 
   const skills = data?.skills ?? [];
   const mcps = data?.mcp ?? [];
-  const selectedSkills = draft?.skills ?? new Set<string>();
-  const selectedMcps = draft?.mcps ?? new Set<string>();
 
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const visibleSkills =
@@ -523,6 +519,14 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
 
   const toggleSkill = (name: string): void => {
     if (draft === null) return;
+    if (draft.mode === "default") {
+      applyDraft({
+        mode: "blacklist",
+        skills: new Set([name]),
+        mcps: new Set<string>(),
+      });
+      return;
+    }
     const s = new Set(draft.skills);
     if (s.has(name)) s.delete(name);
     else s.add(name);
@@ -530,29 +534,61 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
   };
   const toggleMcp = (server: string): void => {
     if (draft === null) return;
+    if (draft.mode === "default") {
+      applyDraft({
+        mode: "blacklist",
+        skills: new Set<string>(),
+        mcps: new Set([server]),
+      });
+      return;
+    }
     const s = new Set(draft.mcps);
     if (s.has(server)) s.delete(server);
     else s.add(server);
     applyDraft({ ...draft, mcps: s });
   };
   const allEnabled = (): void => {
-    if (draft === null) return;
+    if (draft === null || draft.mode === "default") return;
+    const currentSkills = new Set(skills.map((s) => s.name));
+    const currentMcps = new Set(mcps.map((m) => m.server));
+    if (draft.mode === "whitelist") {
+      applyDraft({
+        ...draft,
+        skills: new Set([...draft.skills, ...currentSkills]),
+        mcps: new Set([...draft.mcps, ...currentMcps]),
+      });
+      return;
+    }
     applyDraft({
-      // Bulk operations touch only the current inventory. Hidden entries from
-      // another preset remain in the persisted whitelist.
       ...draft,
-      skills: new Set([...draft.skills, ...skills.map((s) => s.name)]),
-      mcps: new Set([...draft.mcps, ...mcps.map((m) => m.server)]),
+      skills: new Set([...draft.skills].filter((name) => !currentSkills.has(name))),
+      mcps: new Set([...draft.mcps].filter((name) => !currentMcps.has(name))),
     });
   };
   const allDisabled = (): void => {
     if (draft === null) return;
     const currentSkills = new Set(skills.map((s) => s.name));
     const currentMcps = new Set(mcps.map((m) => m.server));
+    if (draft.mode === "default") {
+      applyDraft({
+        mode: "blacklist",
+        skills: currentSkills,
+        mcps: currentMcps,
+      });
+      return;
+    }
+    if (draft.mode === "whitelist") {
+      applyDraft({
+        ...draft,
+        skills: new Set([...draft.skills].filter((name) => !currentSkills.has(name))),
+        mcps: new Set([...draft.mcps].filter((name) => !currentMcps.has(name))),
+      });
+      return;
+    }
     applyDraft({
       ...draft,
-      skills: new Set([...draft.skills].filter((name) => !currentSkills.has(name))),
-      mcps: new Set([...draft.mcps].filter((name) => !currentMcps.has(name))),
+      skills: new Set([...draft.skills, ...currentSkills]),
+      mcps: new Set([...draft.mcps, ...currentMcps]),
     });
   };
 
@@ -660,7 +696,7 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
                   s.name,
                   s.description,
                   "skill",
-                  selectedSkills.has(s.name),
+                  draft !== null && policyEnabled(draft.mode, draft.skills, s.name),
                   () => toggleSkill(s.name),
                 ),
               )}
@@ -688,7 +724,7 @@ function ScopeModal(props: DockProps): React.ReactElement | null {
                   m.server,
                   `${m.toolCount} 个工具`,
                   "mcp",
-                  selectedMcps.has(m.server),
+                  draft !== null && policyEnabled(draft.mode, draft.mcps, m.server),
                   () => toggleMcp(m.server),
                 ),
               )}
