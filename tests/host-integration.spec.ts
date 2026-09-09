@@ -264,7 +264,7 @@ function makeReqPost(url: string, body: string): Record<string, unknown> {
 }
 
 describe('workspace-scope host behavior', () => {
-  it('serves overview from the live Agent scoped Skill snapshot, tools and config', async () => {
+  it('serves overview from the model-invocable live Agent Skill snapshot, tools and config', async () => {
     const env = makeEnv()
     apply(env.ctx as never)
     const handler = env.routeHandler()
@@ -281,7 +281,6 @@ describe('workspace-scope host behavior', () => {
     expect(body.skills.map((skill) => skill.name)).toEqual([
       'keep-skill',
       'drop-skill',
-      'hidden-skill',
     ])
     expect(body.mcp).toEqual([
       { server: 'github', toolCount: 1 },
