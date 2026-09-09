@@ -20,8 +20,8 @@ The entry is shown for a blank new-session Session: the "Workspace scope" button
 
 The dialog groups the currently manageable capabilities into Skills and global MCP servers:
 
-- Skills come only from the scoped Skill view of the current blank Session's Agent; switching Agent Preset refreshes the list
-- Skills absent from the current Agent are not shown; existing names in `.dsh-scope.json` are retained
+- Skills come only from the model-invocable scoped Skill view of the current blank Session's Agent; switching Agent Preset refreshes the list
+- Skills absent from the current Agent, or natively configured with `modelInvocable: false`, are not shown; saved names for other Presets remain in `.dsh-scope.json`
 - Each row has an enable switch; a Skill disabled by the current workspace keeps the ordinary disabled state
 - Clicking a row expands details (Skill description or global MCP tool count)
 - Search, enable-all, and disable-all operate on capabilities manageable in the current UI; changes save immediately
@@ -48,9 +48,9 @@ The file is `.dsh-scope.json` in the workspace root:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `mode` | `string` | Always saved as `whitelist`; reading accepts `default` (everything enabled) and `blacklist` (the list is excluded) |
-| `skills` | `string[]` | Workspace-allowed Skill names; names absent from the current Agent may remain in the file but are not shown |
-| `mcps` | `string[]` | Enabled Host-global MCP server names |
+| `mode` | `string` | `default` enables everything; `whitelist` treats the lists as allowed sets; `blacklist` treats them as excluded sets. The UI preserves existing whitelist/blacklist semantics; the first disable from `default` converts it to `blacklist` |
+| `skills` | `string[]` | Meaning follows `mode`; names hidden by the current Agent remain stored for other Presets |
+| `mcps` | `string[]` | Meaning follows `mode`; only Host-global MCP servers are managed |
 
 ## Data flow
 
