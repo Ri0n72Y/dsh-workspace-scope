@@ -10,12 +10,14 @@ All notable changes to this project are documented in this file. The format is b
 - Added `docs/architecture.md` with C4 and end-to-end Skill/Tool data flows for the DSH 0.1.5 scope model, including Agent Preset composition, layered `SkillRegistry`, `tool-skill`, `ToolRuntime`, and workspace policy insertion points.
 
 ### Changed
-- The management UI now inventories Skills only through the current live Agent's scoped DSH `SkillRegistry` view. Host-global Skill discovery is no longer used as a fallback for an Agent capability list.
+- The management UI now inventories only model-invocable Skills from the current live Agent's scoped DSH `SkillRegistry` view. Host-global Skill discovery is no longer used as a fallback for an Agent capability list.
 - A blank Session refreshes its Skill inventory when its Agent Preset projection changes, including preset recomposition that keeps the same Session id.
-- Bulk enable/disable operations modify only capabilities visible in the current Agent view and preserve saved whitelist entries that belong to another preset.
+- Bulk enable/disable operations modify only capabilities visible in the current Agent view and preserve saved entries that belong to another preset according to the current whitelist/blacklist mode.
 - README compatibility and architecture notes now track DeepSeek Harness 0.1.5-alpha.1 and document the native `agent/pre-step` durable Skill catalog flow.
 
 ### Fixed
+- Preserved `default` and `blacklist` semantics when the current Preset hides Skills: autosave no longer converts a partial scoped view into a whitelist that silently disables capabilities from another Preset. The first disable from `default` now becomes a blacklist.
+- Native `modelInvocable: false` Skills no longer appear in the workspace management inventory, matching DSH `tool-skill` catalog eligibility.
 - Stale overview responses from a previous Agent Preset can no longer overwrite the newly recomposed Agent's Skill list.
 - Removed the unconditional UI claim that every excluded Skill remains available through `/skill-name`; user invocation remains governed by DSH's native `userInvocable` policy.
 
