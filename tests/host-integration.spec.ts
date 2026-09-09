@@ -45,8 +45,13 @@ type Listener = (...args: never[]) => unknown
 
 type TestAgent = ReturnType<ReturnType<typeof makeEnv>['agent']>
 
-function makeEnv(opts: { configText?: string; blockedSkillRegistrations?: string[] } = {}) {
+function makeEnv(opts: {
+  configText?: string
+  blockedSkillRegistrations?: string[]
+  missingAgents?: string[]
+} = {}) {
   const blockedSkillRegistrations = new Set(opts.blockedSkillRegistrations ?? [])
+  const missingAgents = new Set(opts.missingAgents ?? [])
   const state = {
     configText: opts.configText ?? WHITELIST_TEXT,
     serverTools: [...SERVER_TOOLS],
@@ -154,7 +159,9 @@ function makeEnv(opts: { configText?: string; blockedSkillRegistrations?: string
   const ctx = {
     get: (name: string): unknown => {
       if (name === 'webServer') return webServer
-      if (name === 'agents') return { get: (id: string) => agent(id) }
+      if (name === 'agents') {
+        return { get: (id: string) => missingAgents.has(id) ? undefined : agent(id) }
+      }
       if (name === 'systemPrompt') return systemPrompt
       if (name === 'skills') {
         return {
@@ -257,7 +264,7 @@ function makeReqPost(url: string, body: string): Record<string, unknown> {
 }
 
 describe('workspace-scope host behavior', () => {
-  it('serves overview from the skills snapshot, tools and config', async () => {
+  it('serves overview from the live Agent scoped Skill snapshot, tools and config', async () => {
     const env = makeEnv()
     apply(env.ctx as never)
     const handler = env.routeHandler()
@@ -285,6 +292,22 @@ describe('workspace-scope host behavior', () => {
       skills: ['keep-skill'],
       mcps: ['playwright'],
     })
+  })
+
+  it('does not substitute the Host-global Skill view when the requested Agent is absent', async () => {
+    const env = makeEnv({ missingAgents: ['missing'] })
+    apply(env.ctx as never)
+    const handler = env.routeHandler()!
+
+    const res = makeRes()
+    await handler(
+      makeReqGet('/api/dsh-workspace-scope/overview?sessionId=missing') as never,
+      res as never,
+    )
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body) as { skills: unknown[]; mcp: unknown[] }
+    expect(body.skills).toEqual([])
+    expect(body.mcp).toHaveLength(2)
   })
 
   it('saves config and keeps route errors bounded', async () => {
