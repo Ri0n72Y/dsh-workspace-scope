@@ -20,8 +20,8 @@ English version: [README.en.md](README.en.md)
 
 弹窗按「技能」和「全局 MCP 服务器」两个分组展示当前可管理条目：
 
-- Skill 只显示当前空白 Session 对应 Agent 的 scoped Skill view；切换 Agent Preset 后列表随之更新
-- 当前 Agent 中不存在的 Skill 不显示；`.dsh-scope.json` 中已有的同名配置仍保留
+- Skill 只显示当前空白 Session 对应 Agent 中可由模型调用的 scoped Skill view；切换 Agent Preset 后列表随之更新
+- 当前 Agent 中不存在或本身已设置 `modelInvocable: false` 的 Skill 不显示；`.dsh-scope.json` 中已有的其他 Preset 配置仍保留
 - 每行一个开关，打开即启用；已被当前工作区禁用的 Skill 仍按原样显示「已禁用」
 - 点行本身展开详情（Skill 显示描述，全局 MCP 显示工具数量）
 - 搜索、全部启用、全部禁用只操作当前界面可管理的能力，改动即时保存
@@ -48,9 +48,9 @@ Host 全局 MCP 在真实 `system-prompt/assemble` 时通过 Agent 原生 `tools
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `mode` | `string` | 保存时固定为 `whitelist`；读取兼容 `default`（全部启用）与 `blacklist`（列表为排除集） |
-| `skills` | `string[]` | 工作区允许的 Skill 名；当前 Agent 没有的名字可以保留在配置中，但不会显示 |
-| `mcps` | `string[]` | 启用的 Host 全局 MCP 服务器名 |
+| `mode` | `string` | `default` 表示全部启用；`whitelist` 中列表为允许集；`blacklist` 中列表为排除集。UI 保留现有 `whitelist` / `blacklist` 语义；`default` 首次产生禁用时转为 `blacklist` |
+| `skills` | `string[]` | 含义由 `mode` 决定；当前 Agent 不显示的名字仍会保留，供其他 Preset 使用 |
+| `mcps` | `string[]` | 含义由 `mode` 决定；只管理 Host 全局 MCP 服务器 |
 
 ## 数据流
 
