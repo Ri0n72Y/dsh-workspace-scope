@@ -1,6 +1,6 @@
 # dsh-workspace-scope
 
-[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.1.5--alpha.1-2ea44f)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.5-alpha.1) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
+[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.1.5--rc.1-2ea44f)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.5-rc.1) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
 
 ## 插件正在积极开发中，版本更新频繁
 
@@ -28,7 +28,7 @@ English version: [README.en.md](README.en.md)
 
 保存后配置写入当前工作区根目录的 `.dsh-scope.json`。
 
-Skill 策略在每个 `agent/pre-step` 开始时刷新：插件先读取当前 Agent 的 DSH `SkillRegistry` 视图，再为被工作区排除的 Skill 注册 exact-Agent shadow，将 `modelInvocable` 设为 `false`。随后 DSH 自己的 `tool-skill` 根据同一个 scoped view 生成 Skill catalog 和 `skill` loader。被排除但原本允许用户调用的 Skill 仍可通过 `/技能名` 显式加载。
+当前 Agent 存在模型 `skill` Tool surface 时，Skill 策略会在每个 `agent/pre-step` 开始时刷新：插件先读取当前 Agent 的 DSH `SkillRegistry` 视图，再为被工作区排除的 Skill 注册 exact-Agent shadow，将 `modelInvocable` 设为 `false`。随后 DSH 自己的 `tool-skill` 根据同一个 scoped view 生成 Skill catalog 和 `skill` loader。被排除但原本允许用户调用的 Skill 仍可通过 `/技能名` 显式加载。
 
 Host 全局 MCP 在真实 `system-prompt/assemble` 时通过 Agent 原生 `tools.restrict()` 约束。若有效 mask 发生变化，插件让 DSH 重做一次完整 assembly，因此 native Tool schemas、PTC SDK、查找与执行都使用同一个 ToolRuntime 视图。
 
