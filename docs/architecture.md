@@ -40,7 +40,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph HOST["Host plane"]
-        SR["SkillRegistry\nHost-held, layered by scope"]
+        SR["SkillRegistry\nHost-held in supported presets"]
         TR["ToolRuntime\nHost-held, layered by scope"]
         SP["SystemPrompt"]
         MCP["Host-global MCP tool registrations"]
@@ -186,13 +186,17 @@ DSH owns one layered `ToolRuntime`. Host composition, Agent Presets, and exact A
 
 ### 2. Workspace MCP boundary
 
-This plugin manages only Host-global MCP tools. DSH exposes those tools using the public `mcp__<server>__<tool>` name contract, which the plugin groups into MCP servers for its UI.
+This plugin manages only Host-global MCP tools. DSH exposes their model-facing names as `mcp__<serverName>__<rawName>`, but `ToolSchema` carries no MCP owner metadata and DSH does not define the public name as a reversible identity.
+
+Version 0.5 therefore uses the smallest workable convention: it splits at the first `__` after `mcp__`. Raw MCP tool names may contain `__`; managed `serverName` values may not. If a deployment needs `serverName` containing `__`, it is outside 0.5's MCP inventory boundary until DSH exposes stable ownership metadata.
 
 The plugin does not manage MCP/tool registrations created inside Agent or Preset scopes.
 
 ### 3. Agent restriction
 
-On the first real `system-prompt/assemble` of a turn, the workspace config is read and locked. The plugin computes the denied Host-global MCP tool-name set and installs:
+On the first real `system-prompt/assemble` of a turn, the workspace config is read and locked. Authoritative config reads wait for any autosave already queued by the plugin before reading `.dsh-scope.json`.
+
+The plugin computes the denied Host-global MCP tool-name set and installs:
 
 ```ts
 agent.ctx.tools.restrict({ deny })
@@ -222,7 +226,7 @@ flowchart LR
     AT["Exact-Agent tools"] --> TR
 
     CFG["locked .dsh-scope.json"] --> WSP["workspace-scope MCP policy"]
-    TR -->|"global mcp__server__tool inventory"| WSP
+    TR -->|"global MCP public-name inventory"| WSP
     WSP -->|"agent.ctx.tools.restrict deny"| TR
 
     TR --> VIEW["Agent scoped Tool view"]
@@ -276,10 +280,11 @@ sequenceDiagram
 10. MCP filtering continues through exact-Agent `tools.restrict()`, so native, PTC, lookup, and execution share one restricted ToolRuntime view.
 11. A blank-session preset change must trigger a new UI Skill snapshot even when the session id is unchanged.
 12. `serviceForAgent()` is not used to mutate preset internals. The Host-held scoped registries used by the supported shipped Presets are the integration seam.
+13. Authoritative `.dsh-scope.json` reads wait for pending plugin autosaves before overview or the first Agent policy lock.
 
 ## Policy lock lifecycle
 
-`.dsh-scope.json` remains a workspace document with the existing schema. UI changes are saved immediately, but one live Agent locks the effective policy on its first real turn-owned prompt assembly. Later edits affect future conversations, not that already-started Agent.
+`.dsh-scope.json` remains a workspace document with the existing schema. UI changes are saved immediately, but one live Agent locks the effective policy on its first real turn-owned prompt assembly. Any autosave already queued by the plugin finishes before that authoritative read. Later edits affect future conversations, not that already-started Agent.
 
 Skill policy is refreshed at every pre-step from the locked config because Skill providers may change while the Agent lives. MCP policy is reconciled at each real prompt assembly because Host-global MCP registrations may change while the process lives.
 
@@ -288,3 +293,5 @@ Skill policy is refreshed at every pre-step from the locked config because Skill
 `tools.get("skill", agent)` is the narrowest public read available to workspace-scope for deciding whether an Agent has a model Skill surface. It cannot prove the exact private ToolDefinition identity used internally by `@deepseek-ai/dsh-tool-skill`. A custom Preset that shadows that Tool with another same-name `skill` Tool is therefore outside exact support until DSH exposes a public identity or catalog-eligibility seam.
 
 Likewise, DSH supports isolated preset-owned services through `serviceForAgent()`, but that API is documented as read addressing rather than a mutation seam. Version 0.5 targets the shipped 0.1.5-rc.1 Presets, whose Skill path uses the Host-held scoped registry; it does not add an unsupported mutation path for isolated custom SkillRegistry instances.
+
+For MCP, DSH's public tool name is a model-facing name rather than an owner lookup key. Version 0.5 deliberately supports the simple convention `serverName` without `__` and splits the public name at the first delimiter. This handles arbitrary raw tool names without adding a second MCP registry. Remove this limitation only when DSH exposes stable MCP ownership metadata.
