@@ -46,7 +46,7 @@ All notable changes to this project are documented in this file. The format is b
 - Plugin unload disposes capability policies previously installed into live Agent scopes, preventing stale Skill shadows or MCP restrictions from surviving the plugin instance.
 - Workspace config writes are serialized so rapid autosaves cannot complete out of order and roll `.dsh-scope.json` back to an older switch state.
 - Agent disposal consumes DSH's `{ agent }` event payload correctly, so a resumed/recreated Agent with the same session id does not inherit a stale `activePolicies` entry.
-- MCP server grouping follows DSH's exact public-name contract, including the `[A-Za-z0-9_-]{1,32}` server-name constraint, removing the old delimiter-ambiguity assumption.
+- MCP server grouping follows DSH's public-name prefix and server-name character constraint; public tool names are not treated as a reversible MCP identity.
 
 ### Removed
 - Removed the custom `skill-catalog` message renderer/filter, the full-`source.entries` digest workaround, and the extra `tools/pre-execute` Skill deny guard.
