@@ -22,6 +22,8 @@ All notable changes to this project are documented in this file. The format is b
 - Skill inventory rejects incomplete DSH snapshots instead of publishing a partial Agent capability view.
 - Skill runtime policy is skipped when the current Agent has no model `skill` Tool surface, avoiding unnecessary snapshot failures or shadows for Presets without model Skill capability.
 - Post-shadow verification recomputes policy from its fresh Skill snapshot, so a newly visible denied Skill cannot slip into the model catalog during policy installation.
+- Authoritative config reads wait for pending autosaves before overview or the first Agent policy lock.
+- MCP public-name grouping now uses the first delimiter so raw tool names containing `__` stay under their server; `serverName` values containing `__` remain outside the 0.5 compatibility boundary until DSH exposes owner metadata.
 - Stale overview responses from a previous Agent Preset can no longer overwrite the newly recomposed Agent's Skill list.
 - Removed the unconditional UI claim that every excluded Skill remains available through `/skill-name`; user invocation remains governed by DSH's native `userInvocable` policy.
 
