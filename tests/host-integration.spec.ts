@@ -60,6 +60,7 @@ function makeEnv(opts: {
   missingAgents?: string[]
   missingSkillTools?: string[]
   lateSkillOnSecondSnapshot?: boolean
+  writeGate?: Promise<void>
 } = {}) {
   const blockedSkillRegistrations = new Set(opts.blockedSkillRegistrations ?? [])
   const incompleteSkillSnapshots = new Set(opts.incompleteSkillSnapshots ?? [])
@@ -213,6 +214,8 @@ function makeEnv(opts: {
           readText: async (): Promise<string> => state.configText,
           writeText: async (target: unknown, content: string): Promise<void> => {
             state.written.push({ target: String(target), content })
+            await opts.writeGate
+            state.configText = content
           },
         }
       }
@@ -324,6 +327,24 @@ describe('workspace-scope host behavior', () => {
     })
   })
 
+  it('groups MCP raw names containing double underscores under the first delimiter', async () => {
+    const env = makeEnv()
+    env.state.serverTools.push('mcp__github__issue__list')
+    apply(env.ctx as never)
+    const handler = env.routeHandler()!
+
+    const res = makeRes()
+    await handler(
+      makeReqGet('/api/dsh-workspace-scope/overview?sessionId=s1') as never,
+      res as never,
+    )
+    const body = JSON.parse(res.body) as { mcp: Array<{ server: string; toolCount: number }> }
+    expect(body.mcp).toEqual([
+      { server: 'github', toolCount: 2 },
+      { server: 'playwright', toolCount: 2 },
+    ])
+  })
+
   it('does not expose Skills when the current Agent has no model Skill tool surface', async () => {
     const env = makeEnv({ missingSkillTools: ['s1'] })
     apply(env.ctx as never)
@@ -393,6 +414,36 @@ describe('workspace-scope host behavior', () => {
     const missing = makeRes()
     await handler(makeReqGet('/api/dsh-workspace-scope/nope') as never, missing as never)
     expect(missing.statusCode).toBe(404)
+  })
+
+  it('waits for a pending autosave before the first policy lock', async () => {
+    let releaseWrite!: () => void
+    const writeGate = new Promise<void>((resolve) => { releaseWrite = resolve })
+    const env = makeEnv({ writeGate })
+    apply(env.ctx as never)
+    const handler = env.routeHandler()!
+
+    const saveRes = makeRes()
+    const save = handler(
+      makeReqPost(
+        '/api/dsh-workspace-scope/save',
+        JSON.stringify({ sessionId: 'a1', mode: 'blacklist', skills: ['keep-skill'], mcps: ['playwright'] }),
+      ) as never,
+      saveRes as never,
+    )
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    expect(env.state.written).toHaveLength(1)
+
+    const assembly = env.systemPrompt.assemble({ agent: env.agent('a1'), signal: env.signal })
+    const race = await Promise.race([
+      assembly.then(() => 'assembled'),
+      new Promise<string>((resolve) => setTimeout(() => resolve('pending'), 0)),
+    ])
+    expect(race).toBe('pending')
+
+    releaseWrite()
+    await save
+    expect((await assembly).tools.map((tool) => tool.name)).toEqual(['mcp__github__list'])
   })
 
   it('locks config on the first turn assembly and keeps Skill shadows across steps', async () => {
