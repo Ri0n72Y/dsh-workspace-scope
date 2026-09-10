@@ -74,7 +74,7 @@ flowchart LR
     NP --> M
 ```
 
-In DSH 0.1.5 the Skill catalog is a durable `user/message` produced by `tool-skill` during `agent/pre-step`; it is not a `system-prompt` text fragment. This plugin does not parse or rewrite `<available_skills>`.
+In DSH 0.1.5 the Skill catalog is a durable `user/message` produced by `tool-skill` during `agent/pre-step`; it is not a `system-prompt` text fragment. This plugin does not parse or rewrite `<available_skills>`. DSH does not currently expose the private ToolDefinition identity used by `tool-skill`, so custom Presets that shadow the official loader with another same-name `skill` Tool are outside 0.5's exact support boundary; see the architecture document.
 
 ## Contributing
 
