@@ -2,8 +2,8 @@
 //
 // The dynamic client half runs in a restricted sandbox (no import, no fetch):
 // it must be a bare function body with ambient React/host/ctx bindings. This
-// script applies exactly the substitutions the sandbox needs and verifies the
-// output stays in sync with the source (run after every index.tsx edit).
+// script applies exactly the substitutions the sandbox needs. The output is a
+// git-ignored hot-test artifact; run this command before plugin-dev-loop use.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'

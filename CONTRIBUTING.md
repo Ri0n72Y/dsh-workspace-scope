@@ -8,13 +8,15 @@ pnpm run check      # typecheck + dual build (lib/index.js + lib/client.js)
 pnpm test           # vitest: node env by default, jsdom specs opt in per file
 ```
 
-After editing `src/client/index.tsx`, run `pnpm run gen:dynamic` so
-`src/client/dynamic.tsx` (the sandbox build of the same code) stays in sync.
-CI enforces this with a diff check, so a forgotten regeneration turns red.
+`src/client/dynamic.tsx` is a generated hot-test artifact and is not tracked.
+Before plugin-dev-loop hot testing, run `pnpm run gen:dynamic` to generate it
+from `src/client/index.tsx`.
 
 Hot testing without a DSH restart: the package declares `dsh.dynamic` for the
 plugin-dev-loop dev-loader tools (`dev_plugin_build` to compile,
-`dev_plugin_load` to hot-load). Static deployment: `pnpm run deploy`.
+`dev_plugin_load` to hot-load). Static deployment uses `pnpm run deploy`, which
+runs `prepare` first and installs the package through its generated `lib`
+entrypoints.
 
 ## Testing conventions
 

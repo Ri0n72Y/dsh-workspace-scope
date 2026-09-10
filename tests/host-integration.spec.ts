@@ -33,6 +33,14 @@ const SKILLS = [
     invocation: { modelInvocable: false, userInvocable: true },
   },
 ]
+const LATE_SKILL = {
+  name: 'late-skill',
+  description: 'appeared during policy installation',
+  content: 'late body',
+  source: 'custom',
+  provider: 'test',
+  invocation: { modelInvocable: true, userInvocable: true },
+}
 
 const WHITELIST_TEXT = JSON.stringify({
   default: { mode: 'whitelist', skills: ['keep-skill'], mcps: ['playwright'] },
@@ -45,8 +53,19 @@ type Listener = (...args: never[]) => unknown
 
 type TestAgent = ReturnType<ReturnType<typeof makeEnv>['agent']>
 
-function makeEnv(opts: { configText?: string; blockedSkillRegistrations?: string[] } = {}) {
+function makeEnv(opts: {
+  configText?: string
+  blockedSkillRegistrations?: string[]
+  incompleteSkillSnapshots?: string[]
+  missingAgents?: string[]
+  missingSkillTools?: string[]
+  lateSkillOnSecondSnapshot?: boolean
+  writeGate?: Promise<void>
+} = {}) {
   const blockedSkillRegistrations = new Set(opts.blockedSkillRegistrations ?? [])
+  const incompleteSkillSnapshots = new Set(opts.incompleteSkillSnapshots ?? [])
+  const missingAgents = new Set(opts.missingAgents ?? [])
+  const missingSkillTools = new Set(opts.missingSkillTools ?? [])
   const state = {
     configText: opts.configText ?? WHITELIST_TEXT,
     serverTools: [...SERVER_TOOLS],
@@ -60,6 +79,7 @@ function makeEnv(opts: { configText?: string; blockedSkillRegistrations?: string
     skill: typeof SKILLS[number]
     disposed: boolean
   }> = []
+  const skillSnapshotCalls = new Map<string, number>()
   const listeners: Record<string, Listener[]> = {}
   const agentMap = new Map<string, ReturnType<typeof createAgent>>()
   let routeHandler: ((req: unknown, res: unknown) => Promise<void>) | null = null
@@ -99,8 +119,9 @@ function makeEnv(opts: { configText?: string; blockedSkillRegistrations?: string
     return found
   }
 
-  function visibleSkills(scope: { id?: string } | undefined) {
-    return SKILLS.map((skill) => {
+  function visibleSkills(scope: { id?: string } | undefined, includeLate = false) {
+    const source = includeLate ? [...SKILLS, LATE_SKILL] : SKILLS
+    return source.map((skill) => {
       if (scope?.id === undefined) return skill
       return [...skillRegistrations].reverse().find((entry) =>
         entry.agentId === scope.id && !entry.disposed && entry.skill.name === skill.name,
@@ -154,20 +175,38 @@ function makeEnv(opts: { configText?: string; blockedSkillRegistrations?: string
   const ctx = {
     get: (name: string): unknown => {
       if (name === 'webServer') return webServer
-      if (name === 'agents') return { get: (id: string) => agent(id) }
+      if (name === 'agents') {
+        return { get: (id: string) => missingAgents.has(id) ? undefined : agent(id) }
+      }
       if (name === 'systemPrompt') return systemPrompt
       if (name === 'skills') {
         return {
-          snapshot: async (options: { scope?: { id?: string } } = {}) => ({
-            skills: visibleSkills(options.scope),
-            complete: true,
-          }),
+          snapshot: async (options: { scope?: { id?: string } } = {}) => {
+            const id = options.scope?.id
+            const calls = id === undefined ? 0 : (skillSnapshotCalls.get(id) ?? 0)
+            if (id !== undefined) skillSnapshotCalls.set(id, calls + 1)
+            return {
+              skills: visibleSkills(
+                options.scope,
+                opts.lateSkillOnSecondSnapshot === true && calls > 0,
+              ),
+              complete: id === undefined || !incompleteSkillSnapshots.has(id),
+            }
+          },
           get: async (skillName: string, options: { scope?: { id?: string } } = {}) =>
             visibleSkills(options.scope).find((skill) => skill.name === skillName),
         }
       }
       if (name === 'tools') {
-        return { schemas: () => state.serverTools.map((toolName) => ({ name: toolName })) }
+        return {
+          get: (toolName: string, scope?: { id?: string }) =>
+            toolName === 'skill'
+            && scope?.id !== undefined
+            && !missingSkillTools.has(scope.id)
+              ? { name: 'skill' }
+              : undefined,
+          schemas: () => state.serverTools.map((toolName) => ({ name: toolName })),
+        }
       }
       if (name === 'fs') {
         return {
@@ -175,6 +214,8 @@ function makeEnv(opts: { configText?: string; blockedSkillRegistrations?: string
           readText: async (): Promise<string> => state.configText,
           writeText: async (target: unknown, content: string): Promise<void> => {
             state.written.push({ target: String(target), content })
+            await opts.writeGate
+            state.configText = content
           },
         }
       }
@@ -257,7 +298,7 @@ function makeReqPost(url: string, body: string): Record<string, unknown> {
 }
 
 describe('workspace-scope host behavior', () => {
-  it('serves overview from the skills snapshot, tools and config', async () => {
+  it('serves overview from the model-invocable live Agent Skill snapshot, tools and config', async () => {
     const env = makeEnv()
     apply(env.ctx as never)
     const handler = env.routeHandler()
@@ -274,7 +315,6 @@ describe('workspace-scope host behavior', () => {
     expect(body.skills.map((skill) => skill.name)).toEqual([
       'keep-skill',
       'drop-skill',
-      'hidden-skill',
     ])
     expect(body.mcp).toEqual([
       { server: 'github', toolCount: 1 },
@@ -285,6 +325,69 @@ describe('workspace-scope host behavior', () => {
       skills: ['keep-skill'],
       mcps: ['playwright'],
     })
+  })
+
+  it('groups MCP raw names containing double underscores under the first delimiter', async () => {
+    const env = makeEnv()
+    env.state.serverTools.push('mcp__github__issue__list')
+    apply(env.ctx as never)
+    const handler = env.routeHandler()!
+
+    const res = makeRes()
+    await handler(
+      makeReqGet('/api/dsh-workspace-scope/overview?sessionId=s1') as never,
+      res as never,
+    )
+    const body = JSON.parse(res.body) as { mcp: Array<{ server: string; toolCount: number }> }
+    expect(body.mcp).toEqual([
+      { server: 'github', toolCount: 2 },
+      { server: 'playwright', toolCount: 2 },
+    ])
+  })
+
+  it('does not expose Skills when the current Agent has no model Skill tool surface', async () => {
+    const env = makeEnv({ missingSkillTools: ['s1'] })
+    apply(env.ctx as never)
+    const handler = env.routeHandler()!
+
+    const res = makeRes()
+    await handler(
+      makeReqGet('/api/dsh-workspace-scope/overview?sessionId=s1') as never,
+      res as never,
+    )
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body) as { skills: unknown[] }
+    expect(body.skills).toEqual([])
+  })
+
+  it('rejects an incomplete Agent Skill snapshot instead of exposing partial inventory', async () => {
+    const env = makeEnv({ incompleteSkillSnapshots: ['s1'] })
+    apply(env.ctx as never)
+    const handler = env.routeHandler()!
+
+    const res = makeRes()
+    await handler(
+      makeReqGet('/api/dsh-workspace-scope/overview?sessionId=s1') as never,
+      res as never,
+    )
+    expect(res.statusCode).toBe(500)
+    expect(JSON.parse(res.body).error).toContain('skill catalog is incomplete')
+  })
+
+  it('does not substitute the Host-global Skill view when the requested Agent is absent', async () => {
+    const env = makeEnv({ missingAgents: ['missing'] })
+    apply(env.ctx as never)
+    const handler = env.routeHandler()!
+
+    const res = makeRes()
+    await handler(
+      makeReqGet('/api/dsh-workspace-scope/overview?sessionId=missing') as never,
+      res as never,
+    )
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body) as { skills: unknown[]; mcp: unknown[] }
+    expect(body.skills).toEqual([])
+    expect(body.mcp).toHaveLength(2)
   })
 
   it('saves config and keeps route errors bounded', async () => {
@@ -311,6 +414,36 @@ describe('workspace-scope host behavior', () => {
     const missing = makeRes()
     await handler(makeReqGet('/api/dsh-workspace-scope/nope') as never, missing as never)
     expect(missing.statusCode).toBe(404)
+  })
+
+  it('waits for a pending autosave before the first policy lock', async () => {
+    let releaseWrite!: () => void
+    const writeGate = new Promise<void>((resolve) => { releaseWrite = resolve })
+    const env = makeEnv({ writeGate })
+    apply(env.ctx as never)
+    const handler = env.routeHandler()!
+
+    const saveRes = makeRes()
+    const save = handler(
+      makeReqPost(
+        '/api/dsh-workspace-scope/save',
+        JSON.stringify({ sessionId: 'a1', mode: 'blacklist', skills: ['keep-skill'], mcps: ['playwright'] }),
+      ) as never,
+      saveRes as never,
+    )
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    expect(env.state.written).toHaveLength(1)
+
+    const assembly = env.systemPrompt.assemble({ agent: env.agent('a1'), signal: env.signal })
+    const race = await Promise.race([
+      assembly.then(() => 'assembled'),
+      new Promise<string>((resolve) => setTimeout(() => resolve('pending'), 0)),
+    ])
+    expect(race).toBe('pending')
+
+    releaseWrite()
+    await save
+    expect((await assembly).tools.map((tool) => tool.name)).toEqual(['mcp__github__list'])
   })
 
   it('locks config on the first turn assembly and keeps Skill shadows across steps', async () => {
@@ -358,6 +491,20 @@ describe('workspace-scope host behavior', () => {
     expect(env.skillRegistrations[2]!.skill.name).toBe('keep-skill')
   })
 
+  it('skips Skill policy when the Agent has no model Skill tool surface', async () => {
+    const env = makeEnv({
+      missingSkillTools: ['a1'],
+      incompleteSkillSnapshots: ['a1'],
+    })
+    apply(env.ctx as never)
+    const agent = env.agent('a1')
+
+    await env.systemPrompt.assemble({ agent, signal: env.signal })
+    await expect(dispatchPreStep(env.listeners, payloadOf(agent)))
+      .resolves.toEqual({ kind: 'enter' })
+    expect(env.skillRegistrations).toHaveLength(0)
+  })
+
   it('fails closed when a same-layer runtime Skill prevents the deny shadow from winning', async () => {
     const env = makeEnv({ blockedSkillRegistrations: ['drop-skill'] })
     apply(env.ctx as never)
@@ -366,6 +513,17 @@ describe('workspace-scope host behavior', () => {
     await env.systemPrompt.assemble({ agent, signal: env.signal })
     await expect(dispatchPreStep(env.listeners, payloadOf(agent)))
       .rejects.toThrow('failed to hide skill "drop-skill"')
+  })
+
+  it('fails closed when the verified snapshot adds a newly denied Skill', async () => {
+    const env = makeEnv({ lateSkillOnSecondSnapshot: true })
+    apply(env.ctx as never)
+    const agent = env.agent('a1')
+
+    await env.systemPrompt.assemble({ agent, signal: env.signal })
+    await expect(dispatchPreStep(env.listeners, payloadOf(agent)))
+      .rejects.toThrow('failed to hide skill "late-skill"')
+    expect(env.skillRegistrations[0]!.disposed).toBe(true)
   })
 
   it('reassembles only when the effective denied MCP set changes', async () => {

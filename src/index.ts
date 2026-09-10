@@ -112,6 +112,7 @@ interface AgentsServiceLike {
 }
 
 interface ToolsServiceLike {
+  get(name: string, scope?: unknown): unknown;
   schemas(scope?: unknown): { name: string }[];
 }
 
@@ -169,7 +170,11 @@ export function apply(ctx: Context): void {
   const agents = ctx.get("agents") as AgentsServiceLike;
   const systemPrompt = ctx.get("systemPrompt") as SystemPromptLike;
 
+  // ponytail: one queue is enough; split per cwd only if throughput matters.
+  let configWriteQueue: Promise<void> = Promise.resolve();
+
   async function readConfig(cwd: string | undefined): Promise<ScopeConfig> {
+    await configWriteQueue;
     if (cwd === undefined || cwd === "") return { ...DEFAULT_CONFIG };
     try {
       const target = await fs.resolve(`${cwd}/${CONFIG_FILE}`);
@@ -178,9 +183,6 @@ export function apply(ctx: Context): void {
       return { ...DEFAULT_CONFIG };
     }
   }
-
-  // ponytail: one queue is enough; split per cwd only if config-write throughput matters.
-  let configWriteQueue: Promise<void> = Promise.resolve();
 
   function writeConfig(
     cwd: string | undefined,
@@ -233,10 +235,10 @@ export function apply(ctx: Context): void {
 
   function globalMcpToolsMap(): Map<string, string[]> {
     const byServer = new Map<string, string[]>();
-    // DSH 0.1.2-rc.1 validates MCP server names as [A-Za-z0-9_-]{1,32}
-    // and publishes every Host-global MCP tool as mcp__<server>__<tool>.
+    // ponytail: ToolSchema has no MCP owner metadata. Split on the first `__`;
+    // serverName containing `__` stays unsupported until DSH exposes ownership.
     for (const schema of tools.schemas()) {
-      const match = /^mcp__([A-Za-z0-9_-]{1,32})__(.+)$/.exec(schema.name);
+      const match = /^mcp__([A-Za-z0-9_-]{1,32}?)__(.+)$/.exec(schema.name);
       if (match === null) continue;
       const server = match[1]!;
       const names = byServer.get(server) ?? [];
@@ -276,7 +278,7 @@ export function apply(ctx: Context): void {
     cfg: ScopeConfig,
     signal: AbortSignal,
   ): Promise<(() => void) | undefined> {
-    if (cfg.mode === "default") return undefined;
+    if (cfg.mode === "default" || tools.get("skill", agent) === undefined) return undefined;
     const view = { scope: agent, cwd: agent.session.header.cwd, signal };
     const snapshot = await skills.snapshot(view);
     signal.throwIfAborted();
@@ -311,8 +313,11 @@ export function apply(ctx: Context): void {
       if (!verified.complete) {
         throw new Error("dsh-workspace-scope: skill catalog is incomplete");
       }
+      const verifiedDenied = new Set(
+        deniedSkills(cfg, verified.skills.map((skill) => skill.name)),
+      );
       const exposed = verified.skills.find(
-        (skill) => denied.has(skill.name) && skill.invocation?.modelInvocable !== false,
+        (skill) => verifiedDenied.has(skill.name) && skill.invocation?.modelInvocable !== false,
       );
       if (exposed !== undefined) {
         throw new Error(`dsh-workspace-scope: failed to hide skill "${exposed.name}"`);
@@ -432,14 +437,23 @@ export function apply(ctx: Context): void {
     const agent = resolveAgent(sessionId);
     const cwd = agent?.session.header.cwd;
     let skillList: Array<{ name: string; description: string }> = [];
-    try {
-      const snapshot = await skills.snapshot(agent === undefined ? { cwd } : { scope: agent, cwd });
-      skillList = snapshot.skills.map((skill) => ({
-        name: skill.name,
-        description: skill.description ?? "",
-      }));
-    } catch {
-      // An unavailable provider should not break the management UI.
+    // DSH tool-skill publishes the model catalog only when a `skill` Tool is
+    // actually visible to this Agent. ToolRuntime does not expose tool-skill's
+    // private ToolDefinition identity, so this public scoped lookup is the
+    // narrowest host-side eligibility seam available to workspace-scope.
+    if (agent !== undefined && tools.get("skill", agent) !== undefined) {
+      const snapshot = await skills.snapshot({ scope: agent, cwd });
+      if (!snapshot.complete) {
+        // A partial observation is not an authoritative Agent inventory. DSH's
+        // own tool-skill likewise refuses to publish an incomplete snapshot.
+        throw new Error("dsh-workspace-scope: skill catalog is incomplete");
+      }
+      skillList = snapshot.skills
+        .filter((skill) => skill.invocation?.modelInvocable !== false)
+        .map((skill) => ({
+          name: skill.name,
+          description: skill.description ?? "",
+        }));
     }
 
     const byServer = globalMcpToolsMap();
@@ -535,13 +549,9 @@ export function apply(ctx: Context): void {
   ctx.effect(() => webServer.register({ kind: "prefix", path: ROUTE_PREFIX, handler }));
 
   if (typeof harness !== "undefined") {
-    harness.handle("overview", async (args: { sessionId?: unknown }) => {
-      try {
-        return await overviewResult(typeof args?.sessionId === "string" ? args.sessionId : "");
-      } catch (err) {
-        return { error: String((err && (err as Error).message) || err) };
-      }
-    });
+    harness.handle("overview", async (args: { sessionId?: unknown }) =>
+      overviewResult(typeof args?.sessionId === "string" ? args.sessionId : ""),
+    );
     harness.handle("save", async (args: unknown) => {
       try {
         return await saveResult((args ?? {}) as Record<string, unknown>);
