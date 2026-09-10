@@ -23,6 +23,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run check
+      - run: pnpm run gen:dynamic
       - run: pnpm test
       # Coverage gate: below the configured thresholds this step fails.
       - run: pnpm run test:coverage
