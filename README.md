@@ -8,7 +8,7 @@ DeepSeek Harness 工作区能力策略插件：对当前 Agent 已拥有的 Skil
 
 DSH 的 Agent Preset、Host 插件和 Skill provider 负责提供能力；本插件不安装 Skill，也不创建第二套 Skill catalog。它只在当前 Agent 的有效能力视图上应用 `.dsh-scope.json`，让不同工程暴露不同的能力集合。
 
-MCP 范围明确指 Host 全局注册、由 Agent 继承的 MCP 工具。Agent / Preset 作用域内注册的 MCP / Tool 不由本插件管理。
+MCP 范围明确指 Host 全局注册、由 Agent 继承的 MCP 工具。Agent / Preset 作用域内注册的 MCP / Tool 不由本插件管理。DSH 0.1.5 的 `ToolSchema` 尚未提供稳定的 MCP owner metadata，因此 0.5 管理的 MCP `serverName` 不应包含 `__`；raw tool name 可以包含 `__`。
 
 完整的 Skill / Tool 数据流、C4 图和 0.5 集成约束见 [docs/architecture.md](docs/architecture.md)。
 
