@@ -1,6 +1,6 @@
 # Architecture and data flow
 
-This document describes the integration boundary of `dsh-workspace-scope` against DeepSeek Harness `0.1.5-alpha.1`. The diagrams use C4-style levels with ordinary Mermaid flowcharts so they render on GitHub without requiring the Mermaid C4 extension.
+This document describes the integration boundary of `dsh-workspace-scope` against DeepSeek Harness `0.1.5-rc.1`. The diagrams use C4-style levels with ordinary Mermaid flowcharts so they render on GitHub without requiring the Mermaid C4 extension.
 
 ## Scope
 
@@ -87,7 +87,7 @@ The preset is a standing scope mounted once per preset. An Agent joins it throug
 
 ### 1. Capability sources
 
-The Host owns one layered `SkillRegistry`. Skill providers register into the layer of the context that mounted them.
+For the shipped DSH 0.1.5-rc.1 Presets supported by this plugin, the Host-held `SkillRegistry` is layered by scope. Skill providers register into the layer of the context that mounted them.
 
 The standard DSH preset mounts `@deepseek-ai/dsh-skill-filesystem` in its preset scope. Its filesystem provider discovers, according to its configuration, project, custom, user, and bundled Skill roots, including the default roots:
 
@@ -119,7 +119,9 @@ A read without `scope` sees only the global layer and therefore cannot represent
 
 ### 3. Workspace policy
 
-At each `agent/pre-step`, `dsh-workspace-scope` first disposes its previous runtime shadows, reads the unmodified Agent-scoped Skill view, and computes the workspace deny set from the locked `.dsh-scope.json`.
+At each `agent/pre-step`, `dsh-workspace-scope` first checks whether a `skill` Tool resolves for the current Agent. If no model Skill surface exists, Skill policy does nothing for that Agent.
+
+Otherwise the plugin disposes its previous runtime shadows, reads the unmodified Agent-scoped Skill view, and computes the workspace deny set from the locked `.dsh-scope.json`.
 
 For each denied Skill that is currently model-invocable, the plugin registers an exact-Agent runtime shadow with:
 
@@ -130,7 +132,9 @@ For each denied Skill that is currently model-invocable, the plugin registers an
 }
 ```
 
-The plugin then re-reads the scoped catalog and fails the step if a denied Skill is still model-invocable. This catches the DSH same-layer first-wins case where an existing exact-Agent runtime Skill cannot be shadowed later.
+The plugin then re-reads the scoped catalog. Verification recomputes the deny set from that second snapshot rather than reusing the first observation. If a Skill appears while policy installation is in progress and the current policy denies it, the pre-step fails closed instead of letting the newly visible Skill reach DSH's catalog.
+
+The same verification also catches DSH's same-layer first-wins case where an existing exact-Agent runtime Skill prevents a later workspace shadow from winning.
 
 ### 4. DSH model projection
 
@@ -143,6 +147,8 @@ In DSH 0.1.5, the Skill catalog is a durable injected `user/message` (`source.ki
 
 A separate `agent/pre-step` listener handles explicit `/skill-name` invocation. It checks `userInvocable` and injects the Skill body as `<skill_content>`. Therefore a workspace-disabled Skill can remain explicitly user-invocable while disappearing from the model catalog and the model-callable `skill` loader.
 
+DSH `tool-skill` publishes its catalog only when `ctx.tools.get("skill", agent)` resolves to the exact private ToolDefinition that `tool-skill` registered. DSH does not expose that identity publicly, so workspace-scope uses the public scoped presence read as its eligibility seam and does not attempt schema/description fingerprinting or import `tool-skill` internals.
+
 ### Complete Skill flow
 
 ```mermaid
@@ -151,8 +157,9 @@ flowchart LR
     HG["Host-global Skill providers / runtime Skills"] --> SR["SkillRegistry"]
     SFS --> SR
 
+    TR["ToolRuntime"] -->|"skill Tool visible?"| WSP["workspace-scope pre-step policy"]
     SR -->|"snapshot scope=Agent + cwd"| RAW["Agent effective Skill view"]
-    RAW --> WSP["workspace-scope pre-step policy"]
+    RAW --> WSP
     CFG["locked .dsh-scope.json"] --> WSP
     WSP -->|"exact-Agent modelInvocable=false shadows"| SR
 
@@ -258,18 +265,26 @@ sequenceDiagram
 ## 0.5 integration invariants
 
 1. The Skill list in the Workspace Scope UI comes only from the current live Agent's scoped SkillRegistry view. There is no global-snapshot fallback.
-2. The UI displays only Skills in that scoped view. A Skill name retained in `.dsh-scope.json` but absent from the current Agent remains hidden and is not given an additional "unavailable" state.
-3. Hidden/off-preset names in `.dsh-scope.json` are configuration data for other preset states and must not be discarded merely because the current UI cannot see them.
-4. Workspace Scope never scans Skill files, registers a Skill provider, creates a Skill loader, or renders a second `<available_skills>` catalog.
-5. Workspace Skill shadows are refreshed before DSH `tool-skill` pre-step listeners run.
-6. Workspace-disabled Skills set only `modelInvocable: false`; the original `userInvocable` policy is preserved.
-7. Host-global MCP remains the only Tool/MCP inventory managed by this plugin. Agent/Preset-scoped Tool registrations remain outside its MCP policy boundary.
-8. MCP filtering continues through exact-Agent `tools.restrict()`, so native, PTC, lookup, and execution share one restricted ToolRuntime view.
-9. A blank-session preset change must trigger a new UI Skill snapshot even when the session id is unchanged.
-10. `serviceForAgent()` is not used to mutate preset internals. The Host-held scoped registries are the integration seam.
+2. Skill inventory and runtime shadowing are skipped when no `skill` Tool resolves for the current Agent.
+3. The UI displays only model-invocable Skills in that scoped view. A Skill name retained in `.dsh-scope.json` but absent from the current Agent remains hidden and is not given an additional "unavailable" state.
+4. Hidden/off-preset names in `.dsh-scope.json` are configuration data for other preset states and must not be discarded merely because the current UI cannot see them.
+5. Workspace Scope never scans Skill files, registers a Skill provider, creates a Skill loader, or renders a second `<available_skills>` catalog.
+6. Workspace Skill shadows are refreshed before DSH `tool-skill` pre-step listeners run.
+7. Workspace-disabled Skills set only `modelInvocable: false`; the original `userInvocable` policy is preserved.
+8. Verification is against a fresh complete snapshot and recomputes policy from that snapshot; a newly denied Skill fails the step closed.
+9. Host-global MCP remains the only Tool/MCP inventory managed by this plugin. Agent/Preset-scoped Tool registrations remain outside its MCP policy boundary.
+10. MCP filtering continues through exact-Agent `tools.restrict()`, so native, PTC, lookup, and execution share one restricted ToolRuntime view.
+11. A blank-session preset change must trigger a new UI Skill snapshot even when the session id is unchanged.
+12. `serviceForAgent()` is not used to mutate preset internals. The Host-held scoped registries used by the supported shipped Presets are the integration seam.
 
 ## Policy lock lifecycle
 
 `.dsh-scope.json` remains a workspace document with the existing schema. UI changes are saved immediately, but one live Agent locks the effective policy on its first real turn-owned prompt assembly. Later edits affect future conversations, not that already-started Agent.
 
 Skill policy is refreshed at every pre-step from the locked config because Skill providers may change while the Agent lives. MCP policy is reconciled at each real prompt assembly because Host-global MCP registrations may change while the process lives.
+
+## Compatibility boundary
+
+`tools.get("skill", agent)` is the narrowest public read available to workspace-scope for deciding whether an Agent has a model Skill surface. It cannot prove the exact private ToolDefinition identity used internally by `@deepseek-ai/dsh-tool-skill`. A custom Preset that shadows that Tool with another same-name `skill` Tool is therefore outside exact support until DSH exposes a public identity or catalog-eligibility seam.
+
+Likewise, DSH supports isolated preset-owned services through `serviceForAgent()`, but that API is documented as read addressing rather than a mutation seam. Version 0.5 targets the shipped 0.1.5-rc.1 Presets, whose Skill path uses the Host-held scoped registry; it does not add an unsupported mutation path for isolated custom SkillRegistry instances.
