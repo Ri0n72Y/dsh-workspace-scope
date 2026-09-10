@@ -7,10 +7,10 @@ dsh-workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that turns Ski
 ## Common commands (workdir: dsh-workspace-scope/)
 
 - `pnpm run check`: typecheck + tsdown dual build (lib/index.js + lib/client.js)
-- `pnpm test`: vitest run. `pnpm run test:coverage`: same, with a v8 coverage report (dynamic.tsx excluded)
-- `pnpm run gen:dynamic`: generates src/client/dynamic.tsx from src/client/index.tsx. Required after every client source change
-- `pnpm run deploy`: `pnpm run prepare` + `dsh plugin --profile web add .` (static deployment, needs user approval)
-- Hot test loop: `dev_plugin_build` (compile-dynamic.mjs builds dist/dynamic) then `dev_plugin_load` (new Package + update), then verify in the browser. After a client-half update, a `cordis_run` (run mode restart) is usually needed for the browser to mount it
+- `pnpm test`: vitest run. `pnpm run test:coverage`: same, with a v8 coverage report
+- `pnpm run gen:dynamic`: generates the transient, gitignored src/client/dynamic.tsx from src/client/index.tsx for hot testing
+- `pnpm run deploy`: `pnpm run prepare` + `dsh plugin --profile web add .`; DSH installs the package build from `lib/` (needs user approval)
+- Hot test loop: run `pnpm run gen:dynamic`, then `dev_plugin_build` (compile-dynamic.mjs builds dist/dynamic) and `dev_plugin_load` (new Package + update). After a client-half update, a `cordis_run` (run mode restart) is usually needed for the browser to mount it
 
 ## Architecture
 
@@ -19,7 +19,7 @@ dsh-workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that turns Ski
 - MCP reconciliation happens at each real Agent prompt assembly from `tools.schemas()`' global view. Only a change to the effective denied tool-name set replaces the restriction and forces one reassembly; allowed-server inventory changes need no extra work because the current DSH assembly already sees them.
 - The Host hard-injects `webServer`, `fs`, `skills`, `tools`, `agents`, and `systemPrompt`; `sandboxPolicy` remains optional and is used when available for workspace writes.
 - Dual-environment data channel. The dynamic client sandbox forbids import and fetch, so it uses `harness.handle` (host side) with `host.call` (client side); the static bundle uses the webServer routes `/api/dsh-workspace-scope` (GET overview / POST save). The client's `callHost()` switches on `typeof host !== 'undefined'`.
-- `dynamic.tsx` is a generated script artifact: `@ts-nocheck` header, `declare const React: any`, `apply(ctx: any)`; everything else must match `index.tsx`. `gen-dynamic.mjs` validates the markers and fails loudly if any is missing.
+- `dynamic.tsx` is a generated hot-test artifact and is intentionally untracked. `gen-dynamic.mjs` derives it from `index.tsx`, validates the required source markers, and writes it only when the hot-test path needs it.
 - Entry seat: the new-session screen only, `conversation.input.right` (compact chip, rendered when the current session is blank). Ongoing conversations never show the entry. The dialog mounts in `shell.overlay`; module-level `modalOpen` plus `modalListeners` shares the open state with the chip.
 - Config: `.dsh-scope.json` in the workspace root, `default` key `{mode, skills[], mcps[]}`. The UI always saves `whitelist` (checked means enabled); reading accepts legacy `default` / `blacklist`. The effective config becomes process-local Agent state when the first real prompt assembly begins; later file edits do not mutate that Agent's lock.
 - `activePolicies` is keyed by `agent.id` and stores the locked config, current effective MCP deny key, and separate Skill/MCP disposers. Agent disposal and plugin unload release both registrations.
