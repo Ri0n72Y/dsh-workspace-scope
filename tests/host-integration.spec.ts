@@ -48,10 +48,14 @@ type TestAgent = ReturnType<ReturnType<typeof makeEnv>['agent']>
 function makeEnv(opts: {
   configText?: string
   blockedSkillRegistrations?: string[]
+  incompleteSkillSnapshots?: string[]
   missingAgents?: string[]
+  missingSkillTools?: string[]
 } = {}) {
   const blockedSkillRegistrations = new Set(opts.blockedSkillRegistrations ?? [])
+  const incompleteSkillSnapshots = new Set(opts.incompleteSkillSnapshots ?? [])
   const missingAgents = new Set(opts.missingAgents ?? [])
+  const missingSkillTools = new Set(opts.missingSkillTools ?? [])
   const state = {
     configText: opts.configText ?? WHITELIST_TEXT,
     serverTools: [...SERVER_TOOLS],
@@ -167,14 +171,22 @@ function makeEnv(opts: {
         return {
           snapshot: async (options: { scope?: { id?: string } } = {}) => ({
             skills: visibleSkills(options.scope),
-            complete: true,
+            complete: options.scope?.id === undefined || !incompleteSkillSnapshots.has(options.scope.id),
           }),
           get: async (skillName: string, options: { scope?: { id?: string } } = {}) =>
             visibleSkills(options.scope).find((skill) => skill.name === skillName),
         }
       }
       if (name === 'tools') {
-        return { schemas: () => state.serverTools.map((toolName) => ({ name: toolName })) }
+        return {
+          get: (toolName: string, scope?: { id?: string }) =>
+            toolName === 'skill'
+            && scope?.id !== undefined
+            && !missingSkillTools.has(scope.id)
+              ? { name: 'skill' }
+              : undefined,
+          schemas: () => state.serverTools.map((toolName) => ({ name: toolName })),
+        }
       }
       if (name === 'fs') {
         return {
@@ -291,6 +303,35 @@ describe('workspace-scope host behavior', () => {
       skills: ['keep-skill'],
       mcps: ['playwright'],
     })
+  })
+
+  it('does not expose Skills when the current Agent has no model Skill tool surface', async () => {
+    const env = makeEnv({ missingSkillTools: ['s1'] })
+    apply(env.ctx as never)
+    const handler = env.routeHandler()!
+
+    const res = makeRes()
+    await handler(
+      makeReqGet('/api/dsh-workspace-scope/overview?sessionId=s1') as never,
+      res as never,
+    )
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body) as { skills: unknown[] }
+    expect(body.skills).toEqual([])
+  })
+
+  it('rejects an incomplete Agent Skill snapshot instead of exposing partial inventory', async () => {
+    const env = makeEnv({ incompleteSkillSnapshots: ['s1'] })
+    apply(env.ctx as never)
+    const handler = env.routeHandler()!
+
+    const res = makeRes()
+    await handler(
+      makeReqGet('/api/dsh-workspace-scope/overview?sessionId=s1') as never,
+      res as never,
+    )
+    expect(res.statusCode).toBe(500)
+    expect(JSON.parse(res.body).error).toContain('skill catalog is incomplete')
   })
 
   it('does not substitute the Host-global Skill view when the requested Agent is absent', async () => {
