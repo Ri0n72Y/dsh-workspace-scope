@@ -34,17 +34,28 @@ function makeOverview(over: Partial<OverviewData> = {}): OverviewData {
 
 type UseSessions = (sel: (s: unknown) => unknown) => unknown
 
-function sessions(sessionId: string | undefined, blank: boolean): UseSessions {
+function sessions(
+  sessionId: string | undefined,
+  blank: boolean,
+  agentPreset?: string,
+): UseSessions {
   return (sel) => sel({
     current: sessionId,
-    byId: sessionId === undefined ? {} : { [sessionId]: { blank } },
+    byId: sessionId === undefined
+      ? {}
+      : {
+          [sessionId]: {
+            blank,
+            projectionValues: agentPreset === undefined ? {} : { agentPreset },
+          },
+        },
   })
 }
 
 interface Mounted {
   hostCall: ReturnType<typeof vi.fn>
-  /** Render the new-session-screen entry (hero chip). */
-  renderEntries: (useSessions?: UseSessions) => void
+  /** Render the blank-session entry chip. */
+  renderEntry: (useSessions?: UseSessions) => void
   renderModal: (useSessions?: UseSessions) => void
   rerenderModal: (useSessions?: UseSessions) => void
 }
@@ -157,7 +168,7 @@ describe('workspace-scope client', () => {
 
     fireEvent.click(screen.getByText('skill-a'))
     await waitFor(() => expect(screen.getByText('desc of skill-a')).toBeTruthy())
-    expect(screen.getByText('会话中可用 /skill-a 临时加载')).toBeTruthy()
+    expect(screen.queryByText(/临时加载/)).toBeNull()
 
     fireEvent.click(screen.getByText('skill-a'))
     await waitFor(() => expect(screen.queryByText('desc of skill-a')).toBeNull())
@@ -181,7 +192,7 @@ describe('workspace-scope client', () => {
     expect(screen.getAllByText('已禁用').length).toBeGreaterThan(0)
   })
 
-  it('enable all / disable all flip every row and autosave sends the full set', async () => {
+  it('enable all / disable all flip every visible row and autosave the visible set', async () => {
     const m = await mount()
     m.renderModal(sessions('s1', true))
     m.renderEntry(sessions('s1', true))
@@ -192,7 +203,6 @@ describe('workspace-scope client', () => {
     await waitFor(() => {
       expect(screen.getAllByRole('switch').every((s) => s.getAttribute('aria-checked') === 'false')).toBe(true)
     })
-    // the change persisted without any explicit save button
     await waitFor(() => {
       const payload = m.hostCall.mock.calls.find(([method]) => method === 'save')?.[1] as
         { mode: string; skills: string[]; mcps: string[] }
@@ -212,6 +222,30 @@ describe('workspace-scope client', () => {
       expect(payload.mode).toBe('whitelist')
       expect(payload.skills).toEqual(['skill-a', 'skill-b', 'skill-c'])
       expect(payload.mcps).toEqual(['playwright'])
+    })
+  })
+
+  it('preserves whitelist entries hidden by the current preset during bulk operations', async () => {
+    const m = await mount((method: string) => {
+      if (method === 'overview') {
+        return Promise.resolve(makeOverview({
+          skills: [{ name: 'skill-a', description: 'desc of skill-a' }],
+          mcp: [],
+          config: { mode: 'whitelist', skills: ['skill-a', 'hidden-skill'], mcps: [] },
+        }))
+      }
+      return Promise.resolve({ saved: true })
+    })
+    m.renderModal(sessions('s1', true, 'writer'))
+    m.renderEntry(sessions('s1', true, 'writer'))
+    openDialog()
+    await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(1))
+
+    fireEvent.click(screen.getByRole('button', { name: '全部禁用' }))
+    await waitFor(() => {
+      const calls = m.hostCall.mock.calls.filter(([method]) => method === 'save')
+      const payload = calls[calls.length - 1]?.[1] as { skills: string[] } | undefined
+      expect(payload?.skills).toEqual(['hidden-skill'])
     })
   })
 
@@ -282,16 +316,46 @@ describe('workspace-scope client', () => {
       }
       return Promise.resolve({ saved: true })
     })
-    m.renderModal(sessions('s1', true))
-    m.renderEntry(sessions('s1', true))
+    m.renderModal(sessions('s1', true, 'writer'))
+    m.renderEntry(sessions('s1', true, 'writer'))
     openDialog()
     await waitFor(() => expect(screen.getByText('skill-a')).toBeTruthy())
 
-    m.rerenderModal(sessions('s2', true))
+    m.rerenderModal(sessions('s2', true, 'coder'))
     await waitFor(() => {
       expect(screen.getByText('other-skill')).toBeTruthy()
       expect(screen.queryByText('skill-a')).toBeNull()
     })
+  })
+
+  it('reloads the scoped Skill inventory when the preset changes on the same blank session', async () => {
+    let overviewCount = 0
+    const m = await mount((method: string) => {
+      if (method !== 'overview') return Promise.resolve({ saved: true })
+      overviewCount += 1
+      return Promise.resolve(overviewCount === 1
+        ? makeOverview({
+          skills: [{ name: 'writer-skill', description: 'writer' }],
+          mcp: [],
+          config: { mode: 'whitelist', skills: ['writer-skill'], mcps: [] },
+        })
+        : makeOverview({
+          skills: [{ name: 'coder-skill', description: 'coder' }],
+          mcp: [],
+          config: { mode: 'whitelist', skills: ['coder-skill'], mcps: [] },
+        }))
+    })
+    m.renderModal(sessions('s1', true, 'writer'))
+    m.renderEntry(sessions('s1', true, 'writer'))
+    openDialog()
+    await waitFor(() => expect(screen.getByText('writer-skill')).toBeTruthy())
+
+    m.rerenderModal(sessions('s1', true, 'coder'))
+    await waitFor(() => {
+      expect(screen.getByText('coder-skill')).toBeTruthy()
+      expect(screen.queryByText('writer-skill')).toBeNull()
+    })
+    expect(m.hostCall.mock.calls.filter(([method]) => method === 'overview')).toHaveLength(2)
   })
 
   it('reads a legacy blacklist config as the inverted enablement', async () => {
@@ -361,16 +425,14 @@ describe('workspace-scope client', () => {
     expect(document.activeElement).toBe(focusables[0])
   })
 
-  it('shows the entry only on the new-session screen', async () => {
+  it('shows the entry only on a blank session', async () => {
     const m = await mount()
-    // new-session screen (blank): the chip is present
     m.renderModal(sessions('s1', true))
     m.renderEntry(sessions('s1', true))
     expect(screen.getAllByRole('button', { name: '工作区能力' })).toHaveLength(1)
 
     cleanup()
 
-    // ongoing conversation: no entry at all
     m.renderModal(sessions('s1', false))
     m.renderEntry(sessions('s1', false))
     expect(screen.queryByRole('button', { name: '工作区能力' })).toBeNull()
