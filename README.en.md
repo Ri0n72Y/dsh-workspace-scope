@@ -1,6 +1,6 @@
 # dsh-workspace-scope
 
-[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.1.5--alpha.1-2ea44f)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.5-alpha.1) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
+[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.1.5--rc.1-2ea44f)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.5-rc.1) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
 
 ## The plugin is under active development and releases frequently
 
@@ -28,7 +28,7 @@ The dialog groups the currently manageable capabilities into Skills and global M
 
 Saving writes `.dsh-scope.json` in the workspace root.
 
-Skill policy refreshes at the start of each `agent/pre-step`: the plugin first reads the current Agent's DSH `SkillRegistry` view, then registers exact-Agent shadows for workspace-excluded Skills with `modelInvocable: false`. DSH `tool-skill` then builds its Skill catalog and `skill` loader from that same scoped view. Excluded Skills that remain user-invocable can still be loaded explicitly with `/skill-name`.
+When the current Agent exposes a model `skill` Tool surface, Skill policy refreshes at the start of each `agent/pre-step`: the plugin first reads the current Agent's DSH `SkillRegistry` view, then registers exact-Agent shadows for workspace-excluded Skills with `modelInvocable: false`. DSH `tool-skill` then builds its Skill catalog and `skill` loader from that same scoped view. Excluded Skills that remain user-invocable can still be loaded explicitly with `/skill-name`.
 
 Host-global MCP policy is applied during real `system-prompt/assemble` through the Agent's native `tools.restrict()`. When the effective mask changes, the plugin asks DSH to rebuild the full assembly once so native Tool schemas, the PTC SDK, lookup, and execution use the same ToolRuntime view.
 
