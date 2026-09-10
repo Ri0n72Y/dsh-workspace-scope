@@ -112,6 +112,7 @@ interface AgentsServiceLike {
 }
 
 interface ToolsServiceLike {
+  get(name: string, scope?: unknown): unknown;
   schemas(scope?: unknown): { name: string }[];
 }
 
@@ -432,18 +433,23 @@ export function apply(ctx: Context): void {
     const agent = resolveAgent(sessionId);
     const cwd = agent?.session.header.cwd;
     let skillList: Array<{ name: string; description: string }> = [];
-    if (agent !== undefined) {
-      try {
-        const snapshot = await skills.snapshot({ scope: agent, cwd });
-        skillList = snapshot.skills
-          .filter((skill) => skill.invocation?.modelInvocable !== false)
-          .map((skill) => ({
-            name: skill.name,
-            description: skill.description ?? "",
-          }));
-      } catch {
-        // An unavailable provider should not break the management UI.
+    // DSH tool-skill publishes the model catalog only when a `skill` Tool is
+    // actually visible to this Agent. ToolRuntime does not expose tool-skill's
+    // private ToolDefinition identity, so this public scoped lookup is the
+    // narrowest host-side eligibility seam available to workspace-scope.
+    if (agent !== undefined && tools.get("skill", agent) !== undefined) {
+      const snapshot = await skills.snapshot({ scope: agent, cwd });
+      if (!snapshot.complete) {
+        // A partial observation is not an authoritative Agent inventory. DSH's
+        // own tool-skill likewise refuses to publish an incomplete snapshot.
+        throw new Error("dsh-workspace-scope: skill catalog is incomplete");
       }
+      skillList = snapshot.skills
+        .filter((skill) => skill.invocation?.modelInvocable !== false)
+        .map((skill) => ({
+          name: skill.name,
+          description: skill.description ?? "",
+        }));
     }
 
     const byServer = globalMcpToolsMap();
