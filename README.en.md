@@ -16,7 +16,7 @@ See [docs/architecture.md](docs/architecture.md) for the complete Skill / Tool d
 
 ## Usage
 
-The entry is shown for a blank new-session Session: the "Workspace scope" button in the input card's right-side tool row. Ongoing conversations do not show it. The policy locks when that conversation starts its first real model request, so edits on the new-session screen still apply to the conversation about to start; later file edits do not mutate that already-locked Agent.
+The entry is shown for a blank new-session Session: the "Workspace scope" button in the input card's right-side tool row. Ongoing conversations do not show it. The policy locks when that conversation starts its first real model request; if this plugin already has an autosave in flight, that write completes before the lock reads the config. Edits on the new-session screen therefore apply to the conversation about to start, while later file edits do not mutate that already-locked Agent.
 
 The dialog groups the currently manageable capabilities into Skills and global MCP servers:
 
