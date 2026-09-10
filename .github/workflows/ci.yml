@@ -26,9 +26,7 @@ jobs:
       - run: pnpm test
       # Coverage gate: below the configured thresholds this step fails.
       - run: pnpm run test:coverage
-      # The dynamic client artifact must never drift from the TSX source:
-      # regenerating it must produce no diff.
-      - name: dynamic.tsx stays in sync
-        run: |
-          pnpm run gen:dynamic
-          git diff --exit-code -- src/client/dynamic.tsx
+      # Hot-test client is generated on demand and is intentionally untracked.
+      # This verifies the generator still accepts the canonical client source.
+      - name: dynamic client generates
+        run: pnpm run gen:dynamic
