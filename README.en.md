@@ -8,7 +8,7 @@ A DeepSeek Harness workspace capability-policy plugin: apply project-level enabl
 
 DSH Agent Presets, Host plugins, and Skill providers supply capabilities. This plugin does not install Skills or create a second Skill catalog. It applies `.dsh-scope.json` over the current Agent's effective capability view so different workspaces can expose different subsets.
 
-MCP scope here explicitly means Host-global MCP tools inherited by an Agent. MCP / Tool registrations inside an Agent or Preset scope are outside this plugin's management boundary.
+MCP scope here explicitly means Host-global MCP tools inherited by an Agent. MCP / Tool registrations inside an Agent or Preset scope are outside this plugin's management boundary. DSH 0.1.5 `ToolSchema` does not expose stable MCP owner metadata, so MCP `serverName` values managed by 0.5 must not contain `__`; raw tool names may contain `__`.
 
 See [docs/architecture.md](docs/architecture.md) for the complete Skill / Tool data flow, C4 diagrams, and the 0.5 integration invariants.
 
