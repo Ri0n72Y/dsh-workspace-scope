@@ -170,7 +170,11 @@ export function apply(ctx: Context): void {
   const agents = ctx.get("agents") as AgentsServiceLike;
   const systemPrompt = ctx.get("systemPrompt") as SystemPromptLike;
 
+  // ponytail: one queue is enough; split per cwd only if throughput matters.
+  let configWriteQueue: Promise<void> = Promise.resolve();
+
   async function readConfig(cwd: string | undefined): Promise<ScopeConfig> {
+    await configWriteQueue;
     if (cwd === undefined || cwd === "") return { ...DEFAULT_CONFIG };
     try {
       const target = await fs.resolve(`${cwd}/${CONFIG_FILE}`);
@@ -179,9 +183,6 @@ export function apply(ctx: Context): void {
       return { ...DEFAULT_CONFIG };
     }
   }
-
-  // ponytail: one queue is enough; split per cwd only if config-write throughput matters.
-  let configWriteQueue: Promise<void> = Promise.resolve();
 
   function writeConfig(
     cwd: string | undefined,
@@ -234,10 +235,10 @@ export function apply(ctx: Context): void {
 
   function globalMcpToolsMap(): Map<string, string[]> {
     const byServer = new Map<string, string[]>();
-    // DSH publishes Host-global MCP tools as mcp__<server>__<tool> and validates
-    // server names as [A-Za-z0-9_-]{1,32}, so this split is unambiguous.
+    // ponytail: ToolSchema has no MCP owner metadata. Split on the first `__`;
+    // serverName containing `__` stays unsupported until DSH exposes ownership.
     for (const schema of tools.schemas()) {
-      const match = /^mcp__([A-Za-z0-9_-]{1,32})__(.+)$/.exec(schema.name);
+      const match = /^mcp__([A-Za-z0-9_-]{1,32}?)__(.+)$/.exec(schema.name);
       if (match === null) continue;
       const server = match[1]!;
       const names = byServer.get(server) ?? [];
