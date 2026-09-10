@@ -33,6 +33,14 @@ const SKILLS = [
     invocation: { modelInvocable: false, userInvocable: true },
   },
 ]
+const LATE_SKILL = {
+  name: 'late-skill',
+  description: 'appeared during policy installation',
+  content: 'late body',
+  source: 'custom',
+  provider: 'test',
+  invocation: { modelInvocable: true, userInvocable: true },
+}
 
 const WHITELIST_TEXT = JSON.stringify({
   default: { mode: 'whitelist', skills: ['keep-skill'], mcps: ['playwright'] },
@@ -51,6 +59,7 @@ function makeEnv(opts: {
   incompleteSkillSnapshots?: string[]
   missingAgents?: string[]
   missingSkillTools?: string[]
+  lateSkillOnSecondSnapshot?: boolean
 } = {}) {
   const blockedSkillRegistrations = new Set(opts.blockedSkillRegistrations ?? [])
   const incompleteSkillSnapshots = new Set(opts.incompleteSkillSnapshots ?? [])
@@ -69,6 +78,7 @@ function makeEnv(opts: {
     skill: typeof SKILLS[number]
     disposed: boolean
   }> = []
+  const skillSnapshotCalls = new Map<string, number>()
   const listeners: Record<string, Listener[]> = {}
   const agentMap = new Map<string, ReturnType<typeof createAgent>>()
   let routeHandler: ((req: unknown, res: unknown) => Promise<void>) | null = null
@@ -108,8 +118,9 @@ function makeEnv(opts: {
     return found
   }
 
-  function visibleSkills(scope: { id?: string } | undefined) {
-    return SKILLS.map((skill) => {
+  function visibleSkills(scope: { id?: string } | undefined, includeLate = false) {
+    const source = includeLate ? [...SKILLS, LATE_SKILL] : SKILLS
+    return source.map((skill) => {
       if (scope?.id === undefined) return skill
       return [...skillRegistrations].reverse().find((entry) =>
         entry.agentId === scope.id && !entry.disposed && entry.skill.name === skill.name,
@@ -169,10 +180,18 @@ function makeEnv(opts: {
       if (name === 'systemPrompt') return systemPrompt
       if (name === 'skills') {
         return {
-          snapshot: async (options: { scope?: { id?: string } } = {}) => ({
-            skills: visibleSkills(options.scope),
-            complete: options.scope?.id === undefined || !incompleteSkillSnapshots.has(options.scope.id),
-          }),
+          snapshot: async (options: { scope?: { id?: string } } = {}) => {
+            const id = options.scope?.id
+            const calls = id === undefined ? 0 : (skillSnapshotCalls.get(id) ?? 0)
+            if (id !== undefined) skillSnapshotCalls.set(id, calls + 1)
+            return {
+              skills: visibleSkills(
+                options.scope,
+                opts.lateSkillOnSecondSnapshot === true && calls > 0,
+              ),
+              complete: id === undefined || !incompleteSkillSnapshots.has(id),
+            }
+          },
           get: async (skillName: string, options: { scope?: { id?: string } } = {}) =>
             visibleSkills(options.scope).find((skill) => skill.name === skillName),
         }
@@ -421,6 +440,20 @@ describe('workspace-scope host behavior', () => {
     expect(env.skillRegistrations[2]!.skill.name).toBe('keep-skill')
   })
 
+  it('skips Skill policy when the Agent has no model Skill tool surface', async () => {
+    const env = makeEnv({
+      missingSkillTools: ['a1'],
+      incompleteSkillSnapshots: ['a1'],
+    })
+    apply(env.ctx as never)
+    const agent = env.agent('a1')
+
+    await env.systemPrompt.assemble({ agent, signal: env.signal })
+    await expect(dispatchPreStep(env.listeners, payloadOf(agent)))
+      .resolves.toEqual({ kind: 'enter' })
+    expect(env.skillRegistrations).toHaveLength(0)
+  })
+
   it('fails closed when a same-layer runtime Skill prevents the deny shadow from winning', async () => {
     const env = makeEnv({ blockedSkillRegistrations: ['drop-skill'] })
     apply(env.ctx as never)
@@ -429,6 +462,17 @@ describe('workspace-scope host behavior', () => {
     await env.systemPrompt.assemble({ agent, signal: env.signal })
     await expect(dispatchPreStep(env.listeners, payloadOf(agent)))
       .rejects.toThrow('failed to hide skill "drop-skill"')
+  })
+
+  it('fails closed when the verified snapshot adds a newly denied Skill', async () => {
+    const env = makeEnv({ lateSkillOnSecondSnapshot: true })
+    apply(env.ctx as never)
+    const agent = env.agent('a1')
+
+    await env.systemPrompt.assemble({ agent, signal: env.signal })
+    await expect(dispatchPreStep(env.listeners, payloadOf(agent)))
+      .rejects.toThrow('failed to hide skill "late-skill"')
+    expect(env.skillRegistrations[0]!.disposed).toBe(true)
   })
 
   it('reassembles only when the effective denied MCP set changes', async () => {
