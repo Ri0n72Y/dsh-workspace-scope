@@ -1,9 +1,9 @@
-// Generates src/client/dynamic.tsx from src/client/index.tsx.
+// Generates the transient hot-test client from src/client/index.tsx.
 //
 // The dynamic client half runs in a restricted sandbox (no import, no fetch):
-// it must be a bare function body with ambient React/host/ctx bindings. This
-// script applies exactly the substitutions the sandbox needs and verifies the
-// output stays in sync with the source (run after every index.tsx edit).
+// it must be a bare function body with ambient React/host/ctx bindings. The
+// generated src/client/dynamic.tsx is intentionally untracked; run this command
+// whenever the plugin-dev-loop needs a fresh hot-test client.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
