@@ -545,13 +545,9 @@ export function apply(ctx: Context): void {
   ctx.effect(() => webServer.register({ kind: "prefix", path: ROUTE_PREFIX, handler }));
 
   if (typeof harness !== "undefined") {
-    harness.handle("overview", async (args: { sessionId?: unknown }) => {
-      try {
-        return await overviewResult(typeof args?.sessionId === "string" ? args.sessionId : "");
-      } catch (err) {
-        return { error: String((err && (err as Error).message) || err) };
-      }
-    });
+    harness.handle("overview", async (args: { sessionId?: unknown }) =>
+      overviewResult(typeof args?.sessionId === "string" ? args.sessionId : ""),
+    );
     harness.handle("save", async (args: unknown) => {
       try {
         return await saveResult((args ?? {}) as Record<string, unknown>);
