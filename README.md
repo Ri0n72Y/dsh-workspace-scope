@@ -74,7 +74,7 @@ flowchart LR
     NP --> M
 ```
 
-DSH 0.1.5 中，Skill catalog 由 `tool-skill` 在 `agent/pre-step` 生成 durable `user/message`，不属于 `system-prompt` 文本。本插件不解析或改写 `<available_skills>`。
+DSH 0.1.5 中，Skill catalog 由 `tool-skill` 在 `agent/pre-step` 生成 durable `user/message`，不属于 `system-prompt` 文本。本插件不解析或改写 `<available_skills>`。DSH 尚未公开 `tool-skill` 私有 ToolDefinition 的精确 identity，因此同名 `skill` Tool 覆盖官方 `tool-skill` 的自定义 Preset 不属于 0.5 的精确支持范围；详见架构文档。
 
 ## 贡献
 
