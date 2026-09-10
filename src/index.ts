@@ -277,7 +277,7 @@ export function apply(ctx: Context): void {
     cfg: ScopeConfig,
     signal: AbortSignal,
   ): Promise<(() => void) | undefined> {
-    if (cfg.mode === "default") return undefined;
+    if (cfg.mode === "default" || tools.get("skill", agent) === undefined) return undefined;
     const view = { scope: agent, cwd: agent.session.header.cwd, signal };
     const snapshot = await skills.snapshot(view);
     signal.throwIfAborted();
@@ -312,8 +312,11 @@ export function apply(ctx: Context): void {
       if (!verified.complete) {
         throw new Error("dsh-workspace-scope: skill catalog is incomplete");
       }
+      const verifiedDenied = new Set(
+        deniedSkills(cfg, verified.skills.map((skill) => skill.name)),
+      );
       const exposed = verified.skills.find(
-        (skill) => denied.has(skill.name) && skill.invocation?.modelInvocable !== false,
+        (skill) => verifiedDenied.has(skill.name) && skill.invocation?.modelInvocable !== false,
       );
       if (exposed !== undefined) {
         throw new Error(`dsh-workspace-scope: failed to hide skill "${exposed.name}"`);
