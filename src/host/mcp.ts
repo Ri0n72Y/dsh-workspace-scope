@@ -1,5 +1,5 @@
-import { deniedServers } from "./policy";
-import type { ScopeConfig, ToolsServiceLike } from "./types";
+import { deniedServers } from "./policy.js";
+import type { ScopeConfig, ToolsServiceLike } from "./types.js";
 
 const MCP_TOOL_NAME = /^mcp__([A-Za-z0-9_-]{1,32}?)__(.+)$/;
 
