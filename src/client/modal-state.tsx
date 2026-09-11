@@ -1,21 +1,24 @@
-import React from "react";
+import { useSyncExternalStore } from "react";
 
 let modalOpen = false;
-const modalListeners = new Set<() => void>();
+const listeners = new Set<() => void>();
 
-function setModal(open: boolean): void {
-  modalOpen = open;
-  for (const listener of modalListeners) listener();
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
-export function useModalOpen(): [boolean, (open: boolean) => void] {
-  const [open, setOpenState] = React.useState(modalOpen);
-  React.useEffect(() => {
-    const listener = (): void => setOpenState(modalOpen);
-    modalListeners.add(listener);
-    return () => {
-      modalListeners.delete(listener);
-    };
-  }, []);
-  return [open, setModal];
+export function setModalOpen(open: boolean): void {
+  if (open === modalOpen) return;
+  modalOpen = open;
+  for (const listener of [...listeners]) listener();
+}
+
+// ponytail: one boolean shared across a session-scoped seat and a root-scoped
+// overlay does not justify a cross-scope DSH store bridge. Move this state to a
+// shared slot store if the shared UI state grows beyond modal visibility.
+export function useModalOpen(): boolean {
+  return useSyncExternalStore(subscribe, () => modalOpen);
 }
