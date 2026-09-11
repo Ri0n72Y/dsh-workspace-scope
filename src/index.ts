@@ -1,9 +1,9 @@
 /** dsh-workspace-scope — Host entry and composition root. */
 import type { Context } from "@deepseek-ai/cordis";
-import { createWorkspaceApi, registerHttpApi } from "./host/api";
-import { createConfigStore, parseScopeConfig } from "./host/config";
-import { deniedServers, deniedSkills } from "./host/policy";
-import { registerRuntimePolicy } from "./host/runtime-policy";
+import { createWorkspaceApi, registerHttpApi } from "./host/api.js";
+import { createConfigStore, parseScopeConfig } from "./host/config.js";
+import { deniedServers, deniedSkills } from "./host/policy.js";
+import { registerRuntimePolicy } from "./host/runtime-policy.js";
 import type {
   AgentsServiceLike,
   FsServiceLike,
@@ -11,7 +11,7 @@ import type {
   SystemPromptLike,
   ToolsServiceLike,
   WebServerLike,
-} from "./host/types";
+} from "./host/types.js";
 
 export { parseScopeConfig, deniedServers, deniedSkills };
 
