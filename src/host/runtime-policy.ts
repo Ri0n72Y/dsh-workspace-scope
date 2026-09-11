@@ -1,8 +1,8 @@
 import type { Context } from "@deepseek-ai/cordis";
-import { safeDispose } from "./dispose";
-import { deniedMcpTools, globalMcpToolsMap } from "./mcp";
-import { getAgentService } from "./scoped-service";
-import { installSkillPolicy } from "./skill-policy";
+import { safeDispose } from "./dispose.js";
+import { deniedMcpTools, globalMcpToolsMap } from "./mcp.js";
+import { getAgentService } from "./scoped-service.js";
+import { installSkillPolicy } from "./skill-policy.js";
 import type {
   AgentLike,
   AssembleContextLike,
@@ -13,7 +13,7 @@ import type {
   SkillsServiceLike,
   SystemPromptLike,
   ToolsServiceLike,
-} from "./types";
+} from "./types.js";
 
 interface ActivePolicy {
   agent: AgentLike;
