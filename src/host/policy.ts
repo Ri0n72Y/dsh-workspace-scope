@@ -1,4 +1,4 @@
-import type { ScopeConfig, ScopeMode } from "./types";
+import type { ScopeConfig, ScopeMode } from "./types.js";
 
 function excludedNames(mode: ScopeMode, selected: string[], all: string[]): string[] {
   if (mode === "default") return [];
