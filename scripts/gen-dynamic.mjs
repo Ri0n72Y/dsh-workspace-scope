@@ -1,29 +1,48 @@
-// Generates src/client/dynamic.tsx from src/client/index.tsx.
-//
-// The dynamic client half runs in a restricted sandbox (no import, no fetch):
-// it must be a bare function body with ambient React/host/ctx bindings. This
-// script applies exactly the substitutions the sandbox needs. The output is a
-// git-ignored hot-test artifact; run this command before plugin-dev-loop use.
+// Generates the import-free dynamic client artifact from the same split source
+// modules used by the static bundle. The plugin-dev-loop sandbox provides
+// ambient React/host/ctx bindings and does not support module imports.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const srcPath = join(root, 'src/client/index.tsx')
-const outPath = join(root, 'src/client/dynamic.tsx')
+const clientDir = join(root, 'src/client')
+const outPath = join(clientDir, 'dynamic.tsx')
 
-let src = readFileSync(srcPath, 'utf8').replace(/\r\n/g, '\n')
-
-const substitutions = [
-  ['import React from "react"', 'declare const React: any'],
-  ['import type { Context } from "@deepseek-ai/cordis"', ''],
-  ['export function apply(ctx: Context): void {', 'export function apply(ctx: any): void {'],
+const modules = [
+  'styles.ts',
+  'model.ts',
+  'transport.ts',
+  'modal-state.tsx',
+  'components.tsx',
+  'scope-modal.tsx',
+  'index.tsx',
 ]
-for (const [from, to] of substitutions) {
-  if (!src.includes(from)) throw new Error(`missing marker in index.tsx: ${from}`)
-  src = src.split(from).join(to)
+
+function readModule(file, keepExports) {
+  let source = readFileSync(join(clientDir, file), 'utf8').replace(/\r\n/g, '\n')
+  // These source files intentionally keep imports on single lines so the
+  // dynamic stitcher remains a transparent transform rather than a bundler.
+  source = source.replace(/^import .*;\n/gm, '')
+  if (!keepExports) source = source.replace(/^export /gm, '')
+  return source.trim()
 }
 
-const out = '// @ts-nocheck\n/* eslint-disable */\n' + src
+const parts = modules.map((file, index) =>
+  readModule(file, index === modules.length - 1),
+)
+let source = parts.join('\n\n')
+
+const applyMarker = 'export function apply(ctx: Context): void {'
+if (!source.includes(applyMarker)) {
+  throw new Error(`missing marker in stitched client: ${applyMarker}`)
+}
+source = source.replace(applyMarker, 'export function apply(ctx: any): void {')
+
+if (/^import /m.test(source)) {
+  throw new Error('dynamic client still contains an import after stitching')
+}
+
+const out = '// @ts-nocheck\n/* eslint-disable */\ndeclare const React: any;\n' + source + '\n'
 writeFileSync(outPath, out, 'utf8')
 console.log(`generated ${outPath} (${out.length} chars)`)
