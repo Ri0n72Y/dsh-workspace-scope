@@ -1,13 +1,13 @@
-import { disposeAll } from "./dispose";
-import { deniedSkills } from "./policy";
-import { getAgentService } from "./scoped-service";
+import { disposeAll } from "./dispose.js";
+import { deniedSkills } from "./policy.js";
+import { getAgentService } from "./scoped-service.js";
 import type {
   AgentLike,
   ScopeConfig,
   ScopedSkillsLike,
   SkillsServiceLike,
   ToolsServiceLike,
-} from "./types";
+} from "./types.js";
 
 export async function installSkillPolicy(
   skills: SkillsServiceLike,
