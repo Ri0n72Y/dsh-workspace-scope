@@ -4,7 +4,7 @@ import type {
   FsServiceLike,
   SandboxPolicyServiceLike,
   ScopeConfig,
-} from "./types";
+} from "./types.js";
 
 const CONFIG_FILE = ".dsh-scope.json";
 const DEFAULT_CONFIG: ScopeConfig = { mode: "default", skills: [], mcps: [] };
