@@ -1,6 +1,6 @@
 {
   "name": "dsh-workspace-scope",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Per-workspace policy for the current Agent's Skills and inherited Host-global MCP servers in DeepSeek Harness.",
   "keywords": [
     "dsh",
