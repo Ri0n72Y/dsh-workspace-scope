@@ -1,6 +1,6 @@
 import type { Context } from "@deepseek-ai/cordis";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { globalMcpToolsMap } from "./mcp";
+import { globalMcpToolsMap } from "./mcp.js";
 import type {
   AgentLike,
   AgentsServiceLike,
@@ -9,7 +9,7 @@ import type {
   SkillsServiceLike,
   ToolsServiceLike,
   WebServerLike,
-} from "./types";
+} from "./types.js";
 
 const ROUTE_PREFIX = "/api/dsh-workspace-scope";
 const MAX_BODY_BYTES = 65536;
