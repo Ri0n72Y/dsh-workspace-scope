@@ -1,25 +1,40 @@
 // @vitest-environment node
+import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import { getAgentService } from '../src/host/scoped-service'
 
 describe('getAgentService', () => {
-  it('resolves through ctx.get without touching the raw service property', () => {
+  it('resolves a sibling-fiber service through ctx.get while raw property access fails', async () => {
+    const root = new Context()
     const service = { register() {} }
-    const ctx = {
-      get(name: string) {
-        return name === 'skills' ? service : undefined
-      },
-      get skills(): never {
-        throw new Error('cannot get property "skills" without inject')
-      },
-    }
-    const agent = {
-      id: 'agent-1',
-      session: { header: { cwd: '/ws' } },
-      ctx,
-    }
 
-    expect(getAgentService(agent as never, 'skills')).toBe(service)
+    const provider = root.plugin((providerCtx: Context) => {
+      providerCtx.provide('skills', service)
+    })
+    await provider
+
+    let agentCtx!: Context
+    const loop = root.plugin(async (loopCtx: Context) => {
+      const agent = loopCtx.plugin((ctx: Context) => {
+        agentCtx = ctx
+      })
+      await agent
+    })
+    await loop
+
+    try {
+      expect(() => (agentCtx as unknown as { skills: unknown }).skills).toThrow(
+        'cannot get property "skills" without inject',
+      )
+      expect(getAgentService({
+        id: 'agent-1',
+        session: { header: { cwd: '/ws' } },
+        ctx: agentCtx,
+      }, 'skills')).toBe(service)
+    } finally {
+      await loop.dispose()
+      await provider.dispose()
+    }
   })
 
   it('fails clearly when the requested service is absent', () => {
