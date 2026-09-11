@@ -1,10 +1,10 @@
 /** dsh-workspace-scope — Client entry and slot registration. */
 import React from "react";
 import type { Context } from "@deepseek-ai/cordis";
-import { ScopeBar } from "./components";
-import type { DockProps } from "./model";
-import { ScopeModal } from "./scope-modal";
-import { CSS } from "./styles";
+import { ScopeBar } from "./components.js";
+import type { DockProps } from "./model.js";
+import { ScopeModal } from "./scope-modal.js";
+import { CSS } from "./styles.js";
 
 export const name = "workspace-scope-client";
 export const inject = ["slots"];
