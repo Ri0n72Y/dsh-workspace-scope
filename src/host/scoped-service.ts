@@ -1,4 +1,4 @@
-import type { AgentLike } from "./types";
+import type { AgentLike } from "./types.js";
 
 /**
  * Resolve a service through the Agent's scoped Context without requiring the
