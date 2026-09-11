@@ -1,5 +1,4 @@
 import type { Context } from "@deepseek-ai/cordis";
-import { safeDispose } from "./dispose.js";
 import { deniedMcpTools, globalMcpToolsMap } from "./mcp.js";
 import { getAgentService } from "./scoped-service.js";
 import { installSkillPolicy } from "./skill-policy.js";
@@ -38,19 +37,27 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
     listener: (...args: never[]) => unknown,
     options?: boolean | { prepend?: boolean },
   ) => unknown;
+  const dispose = (fn: (() => void) | undefined) => {
+    if (fn === undefined) return;
+    try {
+      fn();
+    } catch {
+      // Agent scope teardown may already have removed the registration.
+    }
+  };
 
   ctx.effect(() => () => {
     for (const policy of activePolicies.values()) {
-      safeDispose(policy.skillDispose);
-      safeDispose(policy.mcpDispose);
+      dispose(policy.skillDispose);
+      dispose(policy.mcpDispose);
     }
     activePolicies.clear();
   });
 
   onEvent("agent/disposed", ({ agent }: { agent: AgentLike }) => {
     const policy = activePolicies.get(agent.id);
-    safeDispose(policy?.skillDispose);
-    safeDispose(policy?.mcpDispose);
+    dispose(policy?.skillDispose);
+    dispose(policy?.mcpDispose);
     activePolicies.delete(agent.id);
   });
 
@@ -81,14 +88,13 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
       const key = JSON.stringify(denied);
       if (active.mcpKey === key) return next();
 
-      const replacement =
-        denied.length === 0
-          ? undefined
-          : getAgentService<ScopedToolsLike>(agent, "tools").restrict({ deny: denied });
+      const replacement = denied.length === 0
+        ? undefined
+        : getAgentService<ScopedToolsLike>(agent, "tools").restrict({ deny: denied });
       const previous = active.mcpDispose;
       active.mcpDispose = replacement;
       active.mcpKey = key;
-      safeDispose(previous);
+      dispose(previous);
 
       if (previous === undefined && replacement === undefined) return next();
       signal.throwIfAborted();
@@ -109,11 +115,9 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
         throw new Error("dsh-workspace-scope: workspace policy is not initialized");
       }
 
-      // Discover without our previous shadow, then rebuild the shadow from the
-      // current provider catalog before DSH's own tool-skill listener runs.
       const previous = active.skillDispose;
       delete active.skillDispose;
-      safeDispose(previous);
+      dispose(previous);
       active.skillDispose = await installSkillPolicy(
         skills,
         tools,
