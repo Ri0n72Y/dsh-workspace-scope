@@ -1,9 +1,9 @@
 import React from "react";
-import { ChevronIcon, SearchIcon, WscSwitch } from "./components";
-import { useModalOpen } from "./modal-state";
-import { draftFromConfig, policyEnabled, setAllCapabilities, toggleCapability } from "./model";
-import type { DockProps, OverviewData, ScopeDraft } from "./model";
-import { callHost } from "./transport";
+import { ChevronIcon, SearchIcon, WscSwitch } from "./components.js";
+import { useModalOpen } from "./modal-state.js";
+import { draftFromConfig, policyEnabled, setAllCapabilities, toggleCapability } from "./model.js";
+import type { DockProps, OverviewData, ScopeDraft } from "./model.js";
+import { callHost } from "./transport.js";
 
 export function ScopeModal(props: DockProps): React.ReactElement | null {
   const [open, setModal] = useModalOpen();
@@ -40,7 +40,7 @@ export function ScopeModal(props: DockProps): React.ReactElement | null {
     const requestedSession = sessionId;
     const requestedView = viewKey;
     callHost("overview", { sessionId: requestedSession })
-      .then((value) => {
+      .then((value: unknown) => {
         if (requestedView !== viewKeyRef.current) return;
         const overview = value as OverviewData;
         setData(overview);
