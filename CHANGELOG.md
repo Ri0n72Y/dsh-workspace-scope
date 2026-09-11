@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-12
+
+### Changed
+- Split the Host and Client implementation into responsibility-focused modules; `src/index.ts` and `src/client/index.tsx` now act only as composition roots.
+- Dynamic client generation now stitches the split Client modules into the same import-free plugin-dev-loop artifact instead of requiring one monolithic source file.
+- Removed the accidentally tracked `coverage/coverage-summary.json` and ignored `coverage/` so local coverage output and machine paths are not committed again.
+
+### Fixed
+- Agent-scoped Skill shadows now resolve the `skills` service through `agent.ctx.get("skills")` instead of raw `agent.ctx.skills` property access. This avoids Cordis' undeclared-inject property error on the first model turn while preserving the exact Agent scope through Cordis' traceable service face.
+- Agent-scoped Tool restriction access uses the same scoped `ctx.get("tools")` seam for consistency without introducing a per-Agent inject fiber, service cache, or extra lifecycle layer.
+
 ## [0.5.0] - 2026-09-09
 
 ### Added
