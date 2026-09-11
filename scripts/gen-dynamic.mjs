@@ -48,7 +48,7 @@ const prelude = [
   '// @ts-nocheck',
   '/* eslint-disable */',
   'declare const React: any;',
-  'const { useEffect, useId, useRef, useState, useSyncExternalStore } = React;',
+  'const { createElement, useEffect, useId, useRef, useState, useSyncExternalStore } = React;',
   `const __WSC_CSS__ = ${JSON.stringify(css)};`,
   '',
 ].join('\n')
