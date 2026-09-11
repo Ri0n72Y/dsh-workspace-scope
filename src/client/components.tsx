@@ -1,6 +1,6 @@
 import React from "react";
-import type { DockProps } from "./model";
-import { useModalOpen } from "./modal-state";
+import type { DockProps } from "./model.js";
+import { useModalOpen } from "./modal-state.js";
 
 export function PresetIcon(props: { className?: string }): React.ReactElement {
   const maskId = "wscmask" + Math.floor(Math.random() * 1e9);
