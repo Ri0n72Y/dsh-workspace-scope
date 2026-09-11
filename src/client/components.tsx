@@ -1,9 +1,9 @@
-import React from "react";
+import React, { useId } from "react";
 import type { DockProps } from "./model.js";
-import { useModalOpen } from "./modal-state.js";
+import { setModalOpen, useModalOpen } from "./modal-state.js";
 
-export function PresetIcon(props: { className?: string }): React.ReactElement {
-  const maskId = "wscmask" + Math.floor(Math.random() * 1e9);
+export function PresetIcon(props: { className?: string }) {
+  const maskId = `wsc${useId().replaceAll(":", "")}`;
   return (
     <svg width={16} height={16} viewBox="0 0 16 16" fill="none" className={props.className}>
       <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="16" height="16">
@@ -20,7 +20,7 @@ export function PresetIcon(props: { className?: string }): React.ReactElement {
   );
 }
 
-export function ChevronIcon(props: { className?: string }): React.ReactElement {
+export function ChevronIcon(props: { className?: string }) {
   return (
     <svg width={14} height={14} viewBox="0 0 14 14" fill="none" className={props.className}>
       <path fill="currentColor" d="M11.8486 5.5L11.4238 5.92383L8.69727 8.65137C8.44157 8.90706 8.21562 9.13382 8.01172 9.29785C7.79912 9.46883 7.55595 9.61756 7.25 9.66602C7.08435 9.69222 6.91565 9.69222 6.75 9.66602C6.44405 9.61756 6.20088 9.46883 5.98828 9.29785C5.78438 9.13382 5.55843 8.90706 5.30273 8.65137L2.57617 5.92383L2.15137 5.5L3 4.65137L3.42383 5.07617L6.15137 7.80273C6.42595 8.07732 6.59876 8.24849 6.74023 8.3623C6.87291 8.46904 6.92272 8.47813 6.9375 8.48047C6.97895 8.48703 7.02105 8.48703 7.0625 8.48047C7.07728 8.47813 7.12709 8.46904 7.25977 8.3623C7.40124 8.24849 7.57405 8.07732 7.84863 7.80273L10.5762 5.07617L11 4.65137L11.8486 5.5Z" />
@@ -28,7 +28,7 @@ export function ChevronIcon(props: { className?: string }): React.ReactElement {
   );
 }
 
-export function SearchIcon(): React.ReactElement {
+export function SearchIcon() {
   return (
     <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path fill="currentColor" d="M11.894845 6.647401C11.894845 3.725463 9.534486 1.356779 6.623219 1.35657C3.711786 1.35657 1.351635 3.725338 1.351635 6.647401C1.351843 9.569296 3.711911 11.938273 6.623219 11.938273C9.534361 11.938064 11.894637 9.569171 11.894845 6.647401ZM13.245462 6.647401C13.245254 10.317935 10.280401 13.293613 6.623219 13.293821C2.965871 13.293821 0.000204 10.31806 0 6.647401C0 2.976574 2.965746 0 6.623219 0C10.280526 0.000205 13.245462 2.9767 13.245462 6.647401Z" />
@@ -37,7 +37,7 @@ export function SearchIcon(): React.ReactElement {
   );
 }
 
-export function WscSwitch(props: { checked: boolean; onToggle: () => void; label: string }): React.ReactElement {
+export function WscSwitch(props: { checked: boolean; onToggle: () => void; label: string }) {
   return (
     <button type="button" role="switch" aria-checked={props.checked} aria-label={props.label} className="wsc-switch" onClick={props.onToggle}>
       <span className="wsc-switch-track" data-on={props.checked ? "true" : undefined} aria-hidden="true">
@@ -47,8 +47,8 @@ export function WscSwitch(props: { checked: boolean; onToggle: () => void; label
   );
 }
 
-export function ScopeBar(props: DockProps): React.ReactElement | null {
-  const [open, setModal] = useModalOpen();
+export function ScopeBar(props: DockProps) {
+  const open = useModalOpen();
   const blank = props.useSessions !== undefined
     ? props.useSessions((state: any) => {
         if (!state.current) return undefined;
@@ -58,10 +58,53 @@ export function ScopeBar(props: DockProps): React.ReactElement | null {
     : false;
   if (blank !== true) return null;
   return (
-    <button type="button" className="wsc-chip" onClick={() => setModal(!open)} aria-expanded={open} title="按工作区限制当前 Agent 的 Skill 与 Host 全局 MCP">
+    <button type="button" className="wsc-chip" onClick={() => setModalOpen(!open)} aria-expanded={open} title="按工作区限制当前 Agent 的 Skill 与 Host 全局 MCP">
       <PresetIcon className="wsc-seat-icon" />
       <span>工作区能力</span>
       <ChevronIcon className="wsc-chevron" />
     </button>
+  );
+}
+
+export function SectionHeading(props: { label: string; count: number; collapsed: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" className="wsc-heading" data-collapsed={props.collapsed ? "true" : undefined} aria-expanded={!props.collapsed} onClick={props.onToggle}>
+      <h3>{props.label}</h3>
+      <span data-count={props.count}>{props.count}</span>
+      <ChevronIcon className="wsc-heading-chevron" />
+    </button>
+  );
+}
+
+export function CapabilityRow(props: {
+  id: string;
+  label: string;
+  detail: string;
+  kind: "skill" | "mcp";
+  enabled: boolean;
+  open: boolean;
+  onToggle: () => void;
+  onExpand: () => void;
+}) {
+  return (
+    <li className="wsc-card" data-open={props.open ? "true" : undefined}>
+      <div className="wsc-card-main">
+        <WscSwitch checked={props.enabled} onToggle={props.onToggle} label={`${props.enabled ? "禁用" : "启用"} ${props.label}`} />
+        <button type="button" className="wsc-row" aria-expanded={props.open} aria-controls={`wsc-details-${props.id}`} onClick={props.onExpand}>
+          <span className="wsc-card-title">{props.label}</span>
+          <span className="wsc-tag" data-enabled={props.enabled ? "true" : "false"}>{props.enabled ? "已启用" : "已禁用"}</span>
+          <ChevronIcon className="wsc-chevron" />
+        </button>
+      </div>
+      {props.open && (
+        <div className="wsc-card-details" id={`wsc-details-${props.id}`}>
+          <p className="wsc-detail-desc">{props.detail}</p>
+          <dl className="wsc-details">
+            <div><dt>状态</dt><dd>{props.enabled ? "已启用" : "已禁用"}</dd></div>
+            {props.kind === "mcp" && <div><dt>类型</dt><dd>Host 全局 MCP 服务器</dd></div>}
+          </dl>
+        </div>
+      )}
+    </li>
   );
 }
