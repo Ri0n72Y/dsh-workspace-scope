@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs";
 import { defineConfig } from "tsdown";
+
+const CLIENT_CSS = readFileSync(new URL("./src/client/styles.css", import.meta.url), "utf8");
 
 /**
  * Platform modules the browser module table shares (mirrors
@@ -20,7 +23,6 @@ const CLIENT_EXTERNALS = [
 ];
 
 export default defineConfig([
-  // Host half: node ESM plugin.
   {
     name: "dsh-workspace-scope",
     entry: ["src/index.ts"],
@@ -30,11 +32,8 @@ export default defineConfig([
     target: "es2024",
     fixedExtension: false,
     dts: false,
-    // Both halves share lib/; keep clean off so one config never wipes the
-    // other's output (mirrors the harness clientBundle preset).
     clean: false,
   },
-  // Browser half: closure-factory artifact the module loader can materialize.
   {
     name: "dsh-workspace-scope/client",
     entry: { client: "src/client/index.tsx" },
@@ -47,16 +46,12 @@ export default defineConfig([
     sourcemap: true,
     deps: { neverBundle: CLIENT_EXTERNALS },
     define: {
-      "process.env.NODE_ENV": JSON.stringify(
-        process.env.NODE_ENV ?? "production",
-      ),
+      __WSC_CSS__: JSON.stringify(CLIENT_CSS),
+      "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV ?? "production"),
     },
     outputOptions: {
       entryFileNames: "client.js",
-      // The module-table id must equal the npm package name (the web shell
-      // resolves client bundles by package name).
-      banner:
-        'window.__ModuleLoader__.load({ id: "dsh-workspace-scope", factory: (require) => {',
+      banner: 'window.__ModuleLoader__.load({ id: "dsh-workspace-scope", factory: (require) => {',
       footer: "return module.exports; } });",
       intro: "var module = { exports: {} }; var exports = module.exports;",
     },
