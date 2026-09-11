@@ -10,7 +10,7 @@ Current compatibility baseline: DSH `0.1.5-rc.1`. Read [docs/architecture.md](do
 
 - `pnpm run check`: typecheck + tsdown dual build (lib/index.js + lib/client.js)
 - `pnpm test`: vitest run. `pnpm run test:coverage`: same, with a v8 coverage report (dynamic.tsx excluded)
-- `pnpm run gen:dynamic`: stitches the split `src/client/*` modules into the git-ignored `src/client/dynamic.tsx`; run it before hot testing after client changes
+- `pnpm run gen:dynamic`: stitches the split `src/client/*` modules into the git-ignored `src/client/dynamic.tsx` and syntax-checks the generated TSX; run it before hot testing after client changes
 - `pnpm run deploy`: `pnpm run prepare` + `dsh plugin --profile web add .` (static deployment, needs user approval)
 - Hot test loop: `dev_plugin_build` (compile-dynamic.mjs builds dist/dynamic) then `dev_plugin_load` (new Package + update), then verify in the browser. After a client-half update, a `cordis_run` (run mode restart) is usually needed for the browser to mount it
 
@@ -26,8 +26,9 @@ Keep the two public entries as composition roots rather than feature containers.
   - `scoped-service.ts`: Agent-context service resolution through `agent.ctx.get()`
   - `skill-policy.ts`: Skill deny shadows and fail-closed verification
   - `runtime-policy.ts`: Agent policy lifecycle and DSH event wiring
-  - `dispose.ts`, `types.ts`: lifecycle helpers and shared structural types
-- `src/client/index.tsx`: Web slot registration only. Client behavior lives under `src/client/`: `scope-modal.tsx`, `components.tsx`, `model.ts`, `transport.ts`, `modal-state.tsx`, and `styles.ts`.
+  - `types.ts`: shared structural types
+- `src/client/index.tsx`: Web slot registration only. Client behavior lives under `src/client/`: `scope-modal.tsx`, `components.tsx`, `model.ts`, `transport.ts`, `modal-state.tsx`, and static `styles.css`.
+- `components.tsx` contains top-level static presentation components. Keep data loading, autosave, and modal-local state in `scope-modal.tsx`; do not recreate nested render-component functions inside it.
 - Do not grow either entry back into a monolith. Split by ownership/responsibility only; do not create one-file-per-function layers.
 
 ## Architecture
@@ -44,10 +45,10 @@ Keep the two public entries as composition roots rather than feature containers.
 - DSH `ToolRuntime` uses one layered scoped view for schema presentation, lookup, and execution. `tools.restrict()` filters inherited/global tools and leaves exact-scope registrations plus the reserved PTC transport intact. Host-global MCP policy therefore uses the Agent-bound ToolRuntime face from `agent.ctx.get("tools")`; Agent/Preset-scoped MCP remains intentionally outside this plugin's boundary.
 - The Host hard-injects `webServer`, `fs`, `skills`, `tools`, `agents`, and `systemPrompt`; `sandboxPolicy` remains optional and is used when available for workspace writes.
 - Dual-environment data channel. The dynamic client sandbox forbids import and fetch, so it uses `harness.handle` (host side) with `host.call` (client side); the static bundle uses the webServer routes `/api/dsh-workspace-scope` (GET overview / POST save). The client's `callHost()` switches on `typeof host !== 'undefined'`.
-- `dynamic.tsx` is a generated, git-ignored hot-test artifact. `gen-dynamic.mjs` strips imports/exports and stitches the same split Client source modules used by the static build, then adds the `@ts-nocheck` header, ambient React declaration, and `apply(ctx:any)` adaptation. CI verifies generation succeeds.
+- `dynamic.tsx` is a generated, git-ignored hot-test artifact. `gen-dynamic.mjs` strips imports/exports and stitches the same split Client source modules used by the static build, injects the same `styles.css`, then uses TypeScript to syntax-check the result. Its textual stitcher deliberately assumes one-line imports and unique top-level names; replace it with a real bundler only if that ceiling stops holding.
 - Entry seat: `conversation.input.right`, which DSH renders only once a Session exists. This plugin further limits the chip to blank Sessions. DSH may stage a Preset before that Session exists; by the time our seat renders, the blank Session should have a live Agent composed under the selected Preset.
 - A Preset switch can re-parent the same blank Agent without changing the session id. The UI Skill inventory must therefore refresh when the current Session's `projectionValues.agentPreset` changes, not only when the current session id changes. DSH SkillRegistry includes the scope chain in its cache key specifically to make such recomposition visible on the next scoped read.
-- The dialog mounts in `shell.overlay`; `modal-state.tsx` owns the module-level `modalOpen` plus `modalListeners` state shared with the chip.
+- `conversation.input.right` is session-scoped while `shell.overlay` is root-scoped. Modal visibility is currently the only state shared across them, so `modal-state.tsx` uses React `useSyncExternalStore` over one module-local boolean. Do not introduce a cross-scope DSH store bridge for this single bit; move shared UI state to the native DSH slot store if it grows beyond modal visibility.
 - Config: `.dsh-scope.json` in the workspace root, `default` key `{mode, skills[], mcps[]}`. `default` means all enabled, `whitelist` stores allowed names, and `blacklist` stores denied names. The UI preserves whitelist/blacklist representation. The first disable from `default` converts it to a blacklist containing only the capabilities the user disabled. The effective config becomes process-local Agent state when the first real prompt assembly begins; later file edits do not mutate that Agent's lock.
 - UI inventory is a projection, not configuration ownership. Skill names retained in `.dsh-scope.json` but absent from the current Agent stay hidden and must not be discarded merely because the current Preset cannot see them. Bulk actions operate on the current visible Agent Skill set while preserving hidden entries according to the current mode.
 - `activePolicies` is keyed by `agent.id` and stores the locked config, current effective MCP deny key, and separate Skill/MCP disposers. Agent disposal and plugin unload release both registrations.
@@ -56,8 +57,11 @@ Keep the two public entries as composition roots rather than feature containers.
 ## UI conventions
 
 - Chinese copy in the UI, English comments in code.
-- Styles use only `--dsw-*` theme tokens (zero hardcoded colors), so a theme switch re-skins automatically. CSS lives in `src/client/styles.ts` as a string array. The static build imports it normally; `gen-dynamic.mjs` stitches that module into the import-free dynamic artifact.
-- Class prefix `wsc-`. Interactions follow the harness settings plugin-inventory page: collapsible rows with details, search box, collapsible group headings (`data-collapsed` rotates the arrow).
+- Import React hooks by name (`useState`, `useEffect`, `useRef`, etc.) and call them directly. Keep the default `React` import only in TSX files that need it for the current classic JSX transform.
+- Let TypeScript infer normal function-component return types. Reserve nullable entry wrappers for actual conditional mounting; `ScopeModalSeat` owns open/closed mounting while `ScopeModal` itself always renders its DOM.
+- Prefer top-level static components over nested functions that return JSX. Keep component boundaries around reusable or independently readable presentation units, not every small expression.
+- Styles live in `src/client/styles.css`, use only `--dsw-*` theme tokens, and keep the `wsc-` class prefix. The static build and dynamic generator both embed this one CSS source; do not recreate a TypeScript string-array style layer.
+- Interactions follow the harness settings plugin-inventory page: collapsible rows with details, search box, collapsible group headings (`data-collapsed` rotates the arrow).
 - The Switch is a hand-rolled `button[role=switch]` (the harness has no reusable component): 28x16 track, 12x12 thumb, enabled color and focus ring from `--dsw-alias-state-business-primary`.
 - Do not add Persona/Preset source labels, missing/unavailable rows, or warning states for Skills outside the current Agent view. They are simply absent from this policy UI.
 
