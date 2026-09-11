@@ -14,7 +14,7 @@ export function apply(ctx: Context): void {
   ctx.effect(() => {
     const tag = document.createElement("style");
     tag.dataset.plugin = "workspace-scope";
-    tag.textContent = __WSC_CSS__;
+    tag.textContent = typeof __WSC_CSS__ === "string" ? __WSC_CSS__ : "";
     document.head.appendChild(tag);
     return () => tag.remove();
   });
