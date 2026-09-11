@@ -1,10 +1,11 @@
 /** dsh-workspace-scope — Client entry and slot registration. */
-import React from "react";
+import { createElement } from "react";
 import type { Context } from "@deepseek-ai/cordis";
 import { ScopeBar } from "./components.js";
 import type { DockProps } from "./model.js";
-import { ScopeModal } from "./scope-modal.js";
-import { CSS } from "./styles.js";
+import { ScopeModalSeat } from "./scope-modal.js";
+
+declare const __WSC_CSS__: string;
 
 export const name = "workspace-scope-client";
 export const inject = ["slots"];
@@ -13,7 +14,7 @@ export function apply(ctx: Context): void {
   ctx.effect(() => {
     const tag = document.createElement("style");
     tag.dataset.plugin = "workspace-scope";
-    tag.textContent = CSS;
+    tag.textContent = __WSC_CSS__;
     document.head.appendChild(tag);
     return () => tag.remove();
   });
@@ -34,14 +35,14 @@ export function apply(ctx: Context): void {
         order: 30,
         label: () => "工作区能力",
       },
-      (props: unknown) => React.createElement(ScopeBar, props as DockProps),
+      (props: unknown) => createElement(ScopeBar, props as DockProps),
     ),
   );
 
   slots.inject("shell.overlay", () =>
     slots.register(
       { name: "shell.overlay", id: "workspace-scope-modal", order: 50 },
-      (props: unknown) => React.createElement(ScopeModal, props as DockProps),
+      (props: unknown) => createElement(ScopeModalSeat, props as DockProps),
     ),
   );
 }
