@@ -1,4 +1,3 @@
-import { disposeAll } from "./dispose.js";
 import { deniedSkills } from "./policy.js";
 import { getAgentService } from "./scoped-service.js";
 import type {
@@ -36,6 +35,16 @@ export async function installSkillPolicy(
   // traceable service face still binds method calls to this exact Agent scope.
   const scopedSkills = getAgentService<ScopedSkillsLike>(agent, "skills");
   const disposers: Array<() => void> = [];
+  const dispose = () => {
+    for (const fn of disposers.reverse()) {
+      try {
+        fn();
+      } catch {
+        // Agent scope teardown may already have removed the registration.
+      }
+    }
+  };
+
   try {
     for (const summary of snapshot.skills) {
       if (!denied.has(summary.name) || summary.invocation?.modelInvocable === false) continue;
@@ -69,9 +78,9 @@ export async function installSkillPolicy(
       throw new Error(`dsh-workspace-scope: failed to hide skill "${exposed.name}"`);
     }
 
-    return disposers.length === 0 ? undefined : () => disposeAll(disposers);
+    return disposers.length === 0 ? undefined : dispose;
   } catch (error) {
-    disposeAll(disposers);
+    dispose();
     throw error;
   }
 }
