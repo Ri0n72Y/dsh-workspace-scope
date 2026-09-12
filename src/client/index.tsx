@@ -5,20 +5,10 @@ import { ScopeBar } from "./components.js";
 import type { DockProps } from "./model.js";
 import { ScopeModalSeat } from "./scope-modal.js";
 
-declare const __WSC_CSS__: string;
-
 export const name = "workspace-scope-client";
 export const inject = ["slots"];
 
 export function apply(ctx: Context): void {
-  ctx.effect(() => {
-    const tag = document.createElement("style");
-    tag.dataset.plugin = "workspace-scope";
-    tag.textContent = typeof __WSC_CSS__ === "string" ? __WSC_CSS__ : "";
-    document.head.appendChild(tag);
-    return () => tag.remove();
-  });
-
   const slots = ctx.get("slots") as
     | {
         inject(key: string, callback: () => unknown): unknown;
