@@ -6,8 +6,6 @@
 
 本插件只做能力范围控制，不负责安装、发现或提供 Skill / MCP。不同工程可以通过各自的 `.dsh-scope.json` 暴露不同的能力集合。
 
-> 项目仍在积极开发中。当前版本按 DeepSeek Harness `0.1.5-rc.1` 验证。
-
 English: [README.en.md](README.en.md)
 
 ## 安装
