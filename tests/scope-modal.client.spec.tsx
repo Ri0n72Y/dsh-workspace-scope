@@ -3,9 +3,9 @@
  * Client behavior tests. They mount through the real plugin entry (apply +
  * slots registration), mock only the RPC boundary (host.call) and the
  * framework hook (useSessions), and assert user-visible behavior: dialog
- * content, counts, switch states, save feedback. No class-name assertions,
- * no DOM internals, no style assertions (dsh convention,
- * packages/client/AGENTS.md: component specs assert user-visible behavior).
+ * content, counts, switch states, save feedback. No class-name or style
+ * assertions (dsh convention, packages/client/AGENTS.md: component specs
+ * assert user-visible behavior).
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -282,8 +282,8 @@ describe('workspace-scope client', () => {
 
     openDialog()
     await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
-    // click the backdrop (outside the panel) to close
-    fireEvent.click(screen.getByRole('dialog').parentElement!.querySelector('.wsc-mask') as Element)
+    // click the backdrop (the sibling immediately behind the panel) to close
+    fireEvent.click(screen.getByRole('dialog').previousElementSibling as Element)
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
