@@ -9,7 +9,28 @@ import ts from 'typescript'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const clientDir = join(root, 'src/client')
 const outPath = join(clientDir, 'dynamic.tsx')
-const css = readFileSync(join(clientDir, 'styles.css'), 'utf8')
+
+function scopedClass(local) {
+  return `wsc-${local.replace(/[A-Z]/g, char => `-${char.toLowerCase()}`)}`
+}
+
+function compileCssModule(source) {
+  const names = new Set()
+  const stylesheet = source.replace(/\.([A-Za-z_][\w-]*)/g, (_match, local) => {
+    names.add(local)
+    return `.${scopedClass(local)}`
+  })
+  return {
+    stylesheet,
+    classes: Object.fromEntries([...names].map(name => [name, scopedClass(name)])),
+  }
+}
+
+// ponytail: mirror the one-sheet transform in tsdown.config.ts. If CSS Module
+// semantics grow, replace both transforms with the DSH/@tsdown/css pipeline.
+const { stylesheet, classes } = compileCssModule(
+  readFileSync(join(clientDir, 'styles.module.css'), 'utf8'),
+)
 
 const modules = [
   'model.ts',
@@ -36,9 +57,7 @@ const applyMarker = 'export function apply(ctx: Context): void {'
 if (!source.includes(applyMarker)) {
   throw new Error(`missing marker in stitched client: ${applyMarker}`)
 }
-source = source
-  .replace('declare const __WSC_CSS__: string;\n', '')
-  .replace(applyMarker, 'export function apply(ctx: any): void {')
+source = source.replace(applyMarker, 'export function apply(ctx: any): void {')
 
 if (/^import /m.test(source)) {
   throw new Error('dynamic client still contains an import after stitching')
@@ -49,7 +68,16 @@ const prelude = [
   '/* eslint-disable */',
   'declare const React: any;',
   'const { createElement, useEffect, useId, useRef, useState, useSyncExternalStore } = React;',
-  `const __WSC_CSS__ = ${JSON.stringify(css)};`,
+  `const css = ${JSON.stringify(classes)};`,
+  `const __WSC_STYLESHEET__ = ${JSON.stringify(stylesheet)};`,
+  'const __WSC_STYLE_ID__ = "dsh-workspace-scope/styles.module.css";',
+  'if (typeof document !== "undefined" && document.querySelector(`style[data-plugin-css="${__WSC_STYLE_ID__}"]`) === null) {',
+  '  const tag = document.createElement("style");',
+  '  tag.dataset.plugin = "workspace-scope";',
+  '  tag.dataset.pluginCss = __WSC_STYLE_ID__;',
+  '  tag.textContent = __WSC_STYLESHEET__;',
+  '  document.head.appendChild(tag);',
+  '}',
   '',
 ].join('\n')
 const out = prelude + source + '\n'
