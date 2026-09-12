@@ -87,25 +87,34 @@ function makeEnv(opts: {
   const signal = { throwIfAborted() {} }
 
   function createAgent(id: string) {
+    const scopedTools = {
+      restrict: (filter: { deny: string[] }): (() => void) => {
+        const call = { agentId: id, deny: [...filter.deny], disposed: false }
+        restrictCalls.push(call)
+        return () => { call.disposed = true }
+      },
+    }
+    const scopedSkills = {
+      register: (skill: typeof SKILLS[number]): (() => void) => {
+        if (blockedSkillRegistrations.has(skill.name)) return () => {}
+        const call = { agentId: id, skill, disposed: false }
+        skillRegistrations.push(call)
+        return () => { call.disposed = true }
+      },
+    }
     return {
       id,
       session: { header: { cwd: '/ws' } },
       ctx: {
-        tools: {
-          restrict: (filter: { deny: string[] }): (() => void) => {
-            const call = { agentId: id, deny: [...filter.deny], disposed: false }
-            restrictCalls.push(call)
-            return () => { call.disposed = true }
-          },
+        // Match the Cordis Context seam used by production. Keeping the named
+        // faces also makes this fixture useful for assertions on scoped effects.
+        get: (name: string): unknown => {
+          if (name === 'tools') return scopedTools
+          if (name === 'skills') return scopedSkills
+          return undefined
         },
-        skills: {
-          register: (skill: typeof SKILLS[number]): (() => void) => {
-            if (blockedSkillRegistrations.has(skill.name)) return () => {}
-            const call = { agentId: id, skill, disposed: false }
-            skillRegistrations.push(call)
-            return () => { call.disposed = true }
-          },
-        },
+        tools: scopedTools,
+        skills: scopedSkills,
       },
     }
   }
