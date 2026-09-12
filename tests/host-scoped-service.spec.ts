@@ -1,15 +1,27 @@
 // @vitest-environment node
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import { getAgentService } from '../src/host/scoped-service'
 
-describe('getAgentService', () => {
-  it('resolves a sibling-fiber service through ctx.get while raw property access fails', async () => {
-    const root = new Context()
-    const service = { register() {} }
+class ProbeSkills extends Service {
+  constructor(ctx: Context) {
+    super(ctx, 'skills')
+  }
 
-    const provider = root.plugin((providerCtx: Context) => {
-      providerCtx.provide('skills', service)
+  callerContext(): Context {
+    return this.ctx
+  }
+}
+
+describe('getAgentService', () => {
+  it('resolves a sibling-fiber service through ctx.get and rebinds method calls to the Agent Context', async () => {
+    const root = new Context()
+    let providerCtx!: Context
+    let service!: ProbeSkills
+
+    const provider = root.plugin((ctx: Context) => {
+      providerCtx = ctx
+      service = new ProbeSkills(ctx)
     })
     await provider
 
@@ -26,11 +38,14 @@ describe('getAgentService', () => {
       expect(() => (agentCtx as unknown as { skills: unknown }).skills).toThrow(
         'cannot get property "skills" without inject',
       )
-      expect(getAgentService({
+      expect(service.callerContext()).toBe(providerCtx)
+
+      const scoped = getAgentService<ProbeSkills>({
         id: 'agent-1',
         session: { header: { cwd: '/ws' } },
         ctx: agentCtx,
-      }, 'skills')).toBe(service)
+      }, 'skills')
+      expect(scoped.callerContext()).toBe(agentCtx)
     } finally {
       await loop.dispose()
       await provider.dispose()
