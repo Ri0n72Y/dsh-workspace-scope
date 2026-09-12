@@ -3,6 +3,7 @@ import { CapabilityRow, SearchIcon, SectionHeading } from "./components.js";
 import { setModalOpen, useModalOpen } from "./modal-state.js";
 import { draftFromConfig, policyEnabled, setAllCapabilities, toggleCapability } from "./model.js";
 import type { DockProps, OverviewData, ScopeDraft } from "./model.js";
+import css from "./styles.module.css";
 import { callHost } from "./transport.js";
 
 export function ScopeModalSeat(props: DockProps) {
@@ -132,57 +133,57 @@ function ScopeModal(props: DockProps) {
   };
 
   return (
-    <div className="wsc-overlay">
-      <div className="wsc-mask" onClick={() => setModalOpen(false)} />
-      <div className="wsc-panel" ref={panelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="工作区能力">
-        <div className="wsc-panel-head">
-          <span className="wsc-panel-title">工作区能力</span>
-          <button type="button" className="wsc-close" onClick={() => setModalOpen(false)} title="关闭">
+    <div className={css.overlay}>
+      <div className={css.mask} onClick={() => setModalOpen(false)} />
+      <div className={css.panel} ref={panelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="工作区能力">
+        <div className={css.panelHead}>
+          <span className={css.panelTitle}>工作区能力</span>
+          <button type="button" className={css.close} onClick={() => setModalOpen(false)} title="关闭">
             <svg width={14} height={14} viewBox="0 0 14 14" fill="none">
               <path fill="currentColor" d="M7 5.84863L4.57617 3.4248L3.4248 4.57617L5.84863 7L3.4248 9.42383L4.57617 10.5752L7 8.15137L9.42383 10.5752L10.5752 9.42383L8.15137 7L10.5752 4.57617L9.42383 3.4248L7 5.84863Z" />
             </svg>
           </button>
         </div>
-        <div className="wsc-panel-body">
+        <div className={css.panelBody}>
           {data === null ? (
-            <div className="wsc-hint">{error ?? (sessionId ? "正在加载…" : "当前没有可用的会话上下文，请先新建或打开一个会话。")}</div>
+            <div className={css.hint}>{error ?? (sessionId ? "正在加载…" : "当前没有可用的会话上下文，请先新建或打开一个会话。")}</div>
           ) : (
-            <div className="wsc-body">
-              <p className="wsc-desc">
+            <div className={css.body}>
+              <p className={css.desc}>
                 仅显示当前 Agent 已提供的技能，并对这些技能和 Host 全局 MCP 应用工作区策略。
                 切换 Agent Preset 后技能列表会同步更新；改动即时保存，只影响该工作区之后开始的新对话。
               </p>
-              <label className="wsc-search">
+              <label className={css.search}>
                 <SearchIcon />
                 <input type="search" value={query} placeholder="搜索技能或全局 MCP…" aria-label="搜索技能或全局 MCP" onChange={(event) => setQuery(event.currentTarget.value)} />
               </label>
 
               <SectionHeading label="技能" count={visibleSkills.length} collapsed={collapsed.skills} onToggle={() => setCollapsed((value) => ({ ...value, skills: !value.skills }))} />
               {!collapsed.skills && (visibleSkills.length > 0 ? (
-                <ul className="wsc-cards">
+                <ul className={css.cards}>
                   {visibleSkills.map((skill) => {
                     const id = `skill:${skill.name}`;
                     return <CapabilityRow key={id} id={id} label={skill.name} detail={skill.description} kind="skill" enabled={draft !== null && policyEnabled(draft.mode, draft.skills, skill.name)} open={expanded === id} onToggle={() => toggle("skills", skill.name)} onExpand={() => setExpanded(expanded === id ? null : id)} />;
                   })}
                 </ul>
-              ) : <p className="wsc-hint">没有匹配的技能。</p>)}
+              ) : <p className={css.hint}>没有匹配的技能。</p>)}
 
               <SectionHeading label="全局 MCP 服务器" count={visibleMcps.length} collapsed={collapsed.mcps} onToggle={() => setCollapsed((value) => ({ ...value, mcps: !value.mcps }))} />
               {!collapsed.mcps && (visibleMcps.length > 0 ? (
-                <ul className="wsc-cards">
+                <ul className={css.cards}>
                   {visibleMcps.map((mcp) => {
                     const id = `mcp:${mcp.server}`;
                     return <CapabilityRow key={id} id={id} label={mcp.server} detail={`${mcp.toolCount} 个工具`} kind="mcp" enabled={draft !== null && policyEnabled(draft.mode, draft.mcps, mcp.server)} open={expanded === id} onToggle={() => toggle("mcps", mcp.server)} onExpand={() => setExpanded(expanded === id ? null : id)} />;
                   })}
                 </ul>
-              ) : <p className="wsc-hint">没有匹配的全局 MCP 服务器。</p>)}
+              ) : <p className={css.hint}>没有匹配的全局 MCP 服务器。</p>)}
 
-              <div className="wsc-actions">
-                <button type="button" className="wsc-btn" onClick={() => setAll(true)}>全部启用</button>
-                <button type="button" className="wsc-btn" onClick={() => setAll(false)}>全部禁用</button>
+              <div className={css.actions}>
+                <button type="button" className={css.btn} onClick={() => setAll(true)}>全部启用</button>
+                <button type="button" className={css.btn} onClick={() => setAll(false)}>全部禁用</button>
               </div>
-              {notice && <p className={notice.kind === "ok" ? "wsc-notice" : "wsc-error"}>{notice.text}</p>}
-              {error && <p className="wsc-error">{error}</p>}
+              {notice && <p className={notice.kind === "ok" ? css.notice : css.error}>{notice.text}</p>}
+              {error && <p className={css.error}>{error}</p>}
             </div>
           )}
         </div>
