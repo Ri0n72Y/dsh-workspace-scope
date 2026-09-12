@@ -17,6 +17,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [0.5.0] - 2026-09-09
 
+> **Deprecated / known-bad:** v0.5.0 can fail on the first model turn with Cordis' `cannot get property "skills" without inject` error ([#22](https://github.com/Ri0n72Y/dsh-workspace-scope/issues/22)). Use v0.5.1 or later.
+
 ### Added
 - Added `docs/architecture.md` with C4 and end-to-end Skill/Tool data flows for the DSH 0.1.5 scope model, including Agent Preset composition, layered `SkillRegistry`, `tool-skill`, `ToolRuntime`, and workspace policy insertion points.
 
