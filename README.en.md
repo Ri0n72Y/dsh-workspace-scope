@@ -6,8 +6,6 @@ Enable or disable the current Agent's existing Skills and inherited Host-global 
 
 This plugin only controls capability scope. It does not install, discover, or provide Skills or MCP servers. Each workspace can expose a different capability set through its own `.dsh-scope.json`.
 
-> The project is under active development. The current version is verified against DeepSeek Harness `0.1.5-rc.1`.
-
 中文版：[README.md](README.md)
 
 ## Install
