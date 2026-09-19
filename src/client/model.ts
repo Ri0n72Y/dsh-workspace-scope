@@ -13,6 +13,8 @@ export interface ScopeDraft {
 }
 
 export interface DockProps {
+  sessionId?: string;
+  useSession?: (selector: (state: any) => any) => any;
   useSessions?: (selector: (state: any) => any) => any;
 }
 
