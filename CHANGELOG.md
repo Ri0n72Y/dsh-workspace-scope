@@ -5,8 +5,8 @@ All notable changes to this project are documented in this file. The format is b
 ## [Unreleased]
 
 ### Fixed
-- Restored the browser UI on DeepSeek Harness `0.1.6-alpha.2` by declaring the actual Client slot-owner packages (`ui-conversation` and `ui-layout`) in `dsh.client.inject` instead of the static `ui-slots` platform module, and prefetched the visible Client entry at boot.
-- Updated the Client build external baseline to match DSH `0.1.6-alpha.2`, removing obsolete pre-0.1.6 browser modules.
+- Restored the browser UI on DeepSeek Harness `0.1.6-alpha.2` after the Client Session list removed its synthetic `current` field: the session-scoped chip now reads its bound Session directly, while the root overlay follows DSH's `retainedBy.mainView` ownership signal.
+- Updated Client package-edge metadata for the slots this plugin contributes to and aligned injected stylesheet ownership with the package id used by the alpha.2 Client module lifecycle.
 
 ## [0.5.1] - 2026-09-12
 
