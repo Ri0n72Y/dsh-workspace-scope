@@ -43,7 +43,7 @@ function clientCssModule() {
         'const tagId = "dsh-workspace-scope/styles.module.css";',
         "if (typeof document !== \"undefined\" && document.querySelector('style[data-plugin-css=\"' + tagId + '\"]') === null) {",
         '  const tag = document.createElement("style");',
-        '  tag.dataset.plugin = "workspace-scope";',
+        '  tag.dataset.plugin = "dsh-workspace-scope";',
         "  tag.dataset.pluginCss = tagId;",
         "  tag.textContent = css;",
         "  document.head.appendChild(tag);",
@@ -54,20 +54,10 @@ function clientCssModule() {
   };
 }
 
-/**
- * Platform modules the browser module table shares (mirrors
- * packages/client/web/src/platform.ts in the harness repo).
- */
+/** Shared module-table imports emitted by this Client bundle. */
 const CLIENT_EXTERNALS = [
   "react",
   "react/jsx-runtime",
-  "react-dom",
-  "react-dom/client",
-  "@deepseek-ai/cordis",
-  "@deepseek-ai/dsh-client-store",
-  "@deepseek-ai/dsh-client-ui-slots",
-  "@deepseek-ai/dsh-client-ui-primitives",
-  "@deepseek-ai/dsh-client-ui-dockkit",
 ];
 
 export default defineConfig([
