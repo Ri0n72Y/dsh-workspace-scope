@@ -6,6 +6,12 @@ import type { DockProps, OverviewData, ScopeDraft } from "./model.js";
 import css from "./styles.module.css";
 import { callHost } from "./transport.js";
 
+function mainSession(state: any): any | undefined {
+  return Object.values(state?.byId ?? {}).find(
+    (row: any) => (row?.retainedBy?.mainView ?? 0) > 0,
+  );
+}
+
 export function ScopeModalSeat(props: DockProps) {
   const open = useModalOpen();
   return open ? <ScopeModal {...props} /> : null;
@@ -22,11 +28,9 @@ function ScopeModal(props: DockProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const sessionRef = useRef<string | undefined>(undefined);
 
-  const sessionId = props.useSessions?.((state: any) => state.current as string | undefined) as string | undefined;
-  const agentPreset = props.useSessions?.((state: any) => {
-    if (!state.current) return undefined;
-    return state.byId[state.current]?.projectionValues?.agentPreset as string | undefined;
-  }) as string | undefined;
+  const sessionId = props.useSessions?.((state: any) => mainSession(state)?.id as string | undefined) as string | undefined;
+  const agentPreset = props.useSessions?.((state: any) =>
+    mainSession(state)?.projectionValues?.agentPreset as string | null | undefined) as string | null | undefined;
 
   useEffect(() => {
     sessionRef.current = sessionId;
