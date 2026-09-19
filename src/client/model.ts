@@ -1,3 +1,8 @@
+import type { PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
+import type {} from "@deepseek-ai/dsh-client-ui-session/client";
+import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
+import type {} from "@deepseek-ai/dsh-client-ui-layout/client";
+
 export interface OverviewData {
   skills: Array<{ name: string; description: string }>;
   mcp: Array<{ server: string; toolCount: number }>;
@@ -12,11 +17,8 @@ export interface ScopeDraft {
   mcps: Set<string>;
 }
 
-export interface DockProps {
-  sessionId?: string;
-  useSession?: (selector: (state: any) => any) => any;
-  useSessions?: (selector: (state: any) => any) => any;
-}
+export type ScopeBarProps = PropsRuntime<"conversation.input.right">;
+export type ScopeModalProps = PropsRuntime<"shell.overlay">;
 
 export function draftFromConfig(config: OverviewData["config"] | undefined): ScopeDraft {
   const value = config ?? {};
