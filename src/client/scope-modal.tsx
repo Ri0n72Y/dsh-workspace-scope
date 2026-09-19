@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import type { SessionListState } from "@deepseek-ai/dsh-api-session-controller/client";
 import { CapabilityRow, SearchIcon, SectionHeading } from "./components.js";
 import { setModalOpen, useModalOpen } from "./modal-state.js";
 import { draftFromConfig, policyEnabled, setAllCapabilities, toggleCapability } from "./model.js";
@@ -22,12 +23,12 @@ function ScopeModal(props: ScopeModalProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const sessionRef = useRef<string | undefined>(undefined);
 
-  const sessionId = props.useSessions((state) =>
+  const sessionId = props.useSessions((state: SessionListState) =>
     Object.values(state.byId).find(
       (row) => (row.retainedBy.mainView ?? 0) > 0,
     )?.id,
   );
-  const agentPreset = props.useSessions((state) =>
+  const agentPreset = props.useSessions((state: SessionListState) =>
     Object.values(state.byId).find(
       (row) => (row.retainedBy.mainView ?? 0) > 0,
     )?.projectionValues?.agentPreset,
