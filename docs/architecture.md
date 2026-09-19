@@ -1,6 +1,6 @@
 # Architecture and data flow
 
-This document describes the integration boundary of `dsh-workspace-scope` against DeepSeek Harness `0.1.5-rc.1`. The diagrams use C4-style levels with ordinary Mermaid flowcharts so they render on GitHub without requiring the Mermaid C4 extension.
+This document describes the integration boundary of `dsh-workspace-scope` against DeepSeek Harness `0.1.6-alpha.2`. The diagrams use C4-style levels with ordinary Mermaid flowcharts so they render on GitHub without requiring the Mermaid C4 extension.
 
 ## Scope
 
@@ -12,6 +12,8 @@ This document describes the integration boundary of `dsh-workspace-scope` agains
 - DSH remains the only owner of model-facing Skill catalogs, Skill loading, Tool schemas, PTC SDK generation, and Tool execution.
 
 The plugin does not install Skills, discover Skill files itself, create a second Skill catalog, or manage Agent/Preset-scoped MCP registrations.
+
+On the Web Client, `dsh.client.inject` is a package-graph dependency list. The plugin declares the two dynamic slot-owner packages it contributes to (`@deepseek-ai/dsh-client-ui-conversation` and `@deepseek-ai/dsh-client-ui-layout`); static platform modules such as `@deepseek-ai/dsh-client-ui-slots` are supplied by the shell and must not be used as package edges. The Client plugin's runtime Cordis dependency remains `inject = ["slots"]`.
 
 ## C4 — system context
 
@@ -87,7 +89,7 @@ The preset is a standing scope mounted once per preset. An Agent joins it throug
 
 ### 1. Capability sources
 
-For the shipped DSH 0.1.5-rc.1 Presets supported by this plugin, the Host-held `SkillRegistry` is layered by scope. Skill providers register into the layer of the context that mounted them.
+For the shipped DSH 0.1.6-alpha.2 Presets supported by this plugin, the Host-held `SkillRegistry` is layered by scope. Skill providers register into the layer of the context that mounted them.
 
 The standard DSH preset mounts `@deepseek-ai/dsh-skill-filesystem` in its preset scope. Its filesystem provider discovers, according to its configuration, project, custom, user, and bundled Skill roots, including the default roots:
 
@@ -143,7 +145,7 @@ The same verification also catches DSH's same-layer first-wins case where an exi
 - the `skill` Tool loads a Skill through the same `{ scope: agent, cwd, signal }` lookup and requires `modelInvocable`;
 - an `agent/pre-step` listener snapshots the same Agent-scoped registry, filters `modelInvocable`, and publishes the durable session Skill catalog.
 
-In DSH 0.1.5, the Skill catalog is a durable injected `user/message` (`source.kind = "skill-catalog"`), not a `system-prompt` section. The catalog contains `<available_skills>` for the model and is replaced when its effective entries change.
+In DSH 0.1.6-alpha.2, the Skill catalog is a durable injected `user/message` (`source.kind = "skill-catalog"`), not a `system-prompt` section. The catalog contains `<available_skills>` for the model and is replaced when its effective entries change.
 
 A separate `agent/pre-step` listener handles explicit `/skill-name` invocation. It checks `userInvocable` and injects the Skill body as `<skill_content>`. Therefore a workspace-disabled Skill can remain explicitly user-invocable while disappearing from the model catalog and the model-callable `skill` loader.
 
@@ -292,6 +294,6 @@ Skill policy is refreshed at every pre-step from the locked config because Skill
 
 `tools.get("skill", agent)` is the narrowest public read available to workspace-scope for deciding whether an Agent has a model Skill surface. It cannot prove the exact private ToolDefinition identity used internally by `@deepseek-ai/dsh-tool-skill`. A custom Preset that shadows that Tool with another same-name `skill` Tool is therefore outside exact support until DSH exposes a public identity or catalog-eligibility seam.
 
-Likewise, DSH supports isolated preset-owned services through `serviceForAgent()`, but that API is documented as read addressing rather than a mutation seam. Version 0.5 targets the shipped 0.1.5-rc.1 Presets, whose Skill path uses the Host-held scoped registry; it does not add an unsupported mutation path for isolated custom SkillRegistry instances.
+Likewise, DSH supports isolated preset-owned services through `serviceForAgent()`, but that API is documented as read addressing rather than a mutation seam. Version 0.5 targets the shipped 0.1.6-alpha.2 Presets, whose Skill path uses the Host-held scoped registry; it does not add an unsupported mutation path for isolated custom SkillRegistry instances.
 
 For MCP, DSH's public tool name is a model-facing name rather than an owner lookup key. Version 0.5 deliberately supports the simple convention `serverName` without `__` and splits the public name at the first delimiter. This handles arbitrary raw tool names without adding a second MCP registry. Remove this limitation only when DSH exposes stable MCP ownership metadata.
