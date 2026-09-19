@@ -11,16 +11,23 @@ interface OverviewData {
 }
 
 type UseSessions = (sel: (s: unknown) => unknown) => unknown
+type UseSession = (sel: (s: unknown) => unknown) => unknown
 
 const useSessions: UseSessions = (sel) => sel({
-  current: 's1',
+  ids: ['s1'],
   byId: {
     s1: {
+      id: 's1',
       blank: true,
+      retainedBy: { mainView: 1 },
       projectionValues: { agentPreset: 'writer' },
     },
   },
+  phase: 'ready',
+  subagentsByParent: {},
+  jobsBySession: {},
 })
+const useSession: UseSession = (sel) => sel({ blank: true })
 
 async function mount(overview: OverviewData) {
   vi.resetModules()
@@ -49,7 +56,7 @@ async function mount(overview: OverviewData) {
   const modal = seats.get('shell.overlay')
   if (!entry || !modal) throw new Error('workspace-scope seats were not registered')
   render(modal({ useSessions }) as ReactElement)
-  render(entry({ useSessions }) as ReactElement)
+  render(entry({ sessionId: 's1', useSession, useSessions }) as ReactElement)
   fireEvent.click(screen.getByRole('button', { name: '工作区能力' }))
   await waitFor(() => expect(screen.getByRole('dialog', { name: '工作区能力' })).toBeTruthy())
   return hostCall
