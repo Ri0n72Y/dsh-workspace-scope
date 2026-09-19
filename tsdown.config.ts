@@ -56,8 +56,7 @@ function clientCssModule() {
 
 /**
  * Platform modules the browser module table shares (mirrors
- * packages/client/web/src/platform.ts in the harness repo, plus the runtime
- * client exemption). Client bundle code may only import these at runtime.
+ * packages/client/web/src/platform.ts in the harness repo).
  */
 const CLIENT_EXTERNALS = [
   "react",
