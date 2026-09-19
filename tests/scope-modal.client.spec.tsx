@@ -98,7 +98,7 @@ async function mount(hostImpl?: (method: string, args: unknown) => Promise<unkno
   }
   const ctx = {
     effect: (cb: () => void): (() => void) => { cb(); return () => {} },
-    get: (name: string): unknown => (name === 'slots' ? slots : undefined),
+    slots,
   }
   mod.apply(ctx as unknown as Context)
 
