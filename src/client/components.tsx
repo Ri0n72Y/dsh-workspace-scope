@@ -1,4 +1,5 @@
 import React, { useId } from "react";
+import type { SessionSnapshot } from "@deepseek-ai/dsh-api-session-controller/client";
 import type { ScopeBarProps } from "./model.js";
 import { setModalOpen, useModalOpen } from "./modal-state.js";
 import css from "./styles.module.css";
@@ -50,7 +51,7 @@ export function WscSwitch(props: { checked: boolean; onToggle: () => void; label
 
 export function ScopeBar(props: ScopeBarProps) {
   const open = useModalOpen();
-  const blank = props.useSession((state) => state.blank);
+  const blank = props.useSession((state: SessionSnapshot) => state.blank);
   if (blank !== true) return null;
   return (
     <button type="button" className={css.chip} onClick={() => setModalOpen(!open)} aria-expanded={open} title="按工作区限制当前 Agent 的 Skill 与 Host 全局 MCP">
