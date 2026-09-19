@@ -13,7 +13,9 @@ This document describes the integration boundary of `dsh-workspace-scope` agains
 
 The plugin does not install Skills, discover Skill files itself, create a second Skill catalog, or manage Agent/Preset-scoped MCP registrations.
 
-On the Web Client, `dsh.client.inject` is a package-graph dependency list. The plugin declares the two dynamic slot-owner packages it contributes to (`@deepseek-ai/dsh-client-ui-conversation` and `@deepseek-ai/dsh-client-ui-layout`); static platform modules such as `@deepseek-ai/dsh-client-ui-slots` are supplied by the shell and must not be used as package edges. The Client plugin's runtime Cordis dependency remains `inject = ["slots"]`.
+On the Web Client, `dsh.client.inject` records package dependency edges but does not sequence activation. The plugin lists the two slot-owner packages it contributes to (`@deepseek-ai/dsh-client-ui-conversation` and `@deepseek-ai/dsh-client-ui-layout`); runtime `inject = ["slots"]` and `ctx.slots.inject(...)` remain the service/declaration lifecycle seams.
+
+DSH `0.1.6-alpha.2` no longer carries a synthetic `current` field in `SessionListState`. The `conversation.input.right` entry reads blank state from its session-scoped `useSession` seat. The root-scoped `shell.overlay` cannot receive session-scoped props, so it resolves the main Session from the list row whose `retainedBy.mainView` count is positive, the same ownership signal used by DSH workspace navigation. Preset changes are read from that row's `projectionValues.agentPreset` so the open modal refreshes without inventing another cross-scope store.
 
 ## C4 — system context
 
