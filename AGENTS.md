@@ -4,7 +4,7 @@
 
 dsh-workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that applies per-workspace policy to Skills already visible to the current Agent and to Host-global MCP servers. Agent/Preset-scoped MCP registrations are outside this plugin's management boundary. The static deployment form is a standard DSH bundle; the `dsh.dynamic` section exists only for hot testing.
 
-Current compatibility baseline: DSH `0.1.5-rc.1`. Read [docs/architecture.md](docs/architecture.md) before changing Skill or Tool integration; it records the upstream ownership and data-flow contracts used by 0.5.
+Current compatibility baseline: DSH `0.1.6-alpha.2`. Read [docs/architecture.md](docs/architecture.md) before changing Skill or Tool integration; it records the upstream ownership and data-flow contracts used by 0.5.
 
 ## Common commands (workdir: dsh-workspace-scope/)
 
@@ -28,6 +28,7 @@ Keep the two public entries as composition roots rather than feature containers.
   - `runtime-policy.ts`: Agent policy lifecycle and DSH event wiring
   - `types.ts`: shared structural types
 - `src/client/index.tsx`: Web slot registration only. Client behavior lives under `src/client/`: `scope-modal.tsx`, `components.tsx`, `model.ts`, `transport.ts`, `modal-state.tsx`, and `styles.module.css`; `css.d.ts` only supplies the CSS Module import type.
+- DSH 0.1.6 client manifest rule: `dsh.client.inject` contains dynamic client package edges, not runtime services or static platform modules. This plugin depends on the slot owners `@deepseek-ai/dsh-client-ui-conversation` and `@deepseek-ai/dsh-client-ui-layout`; runtime `export const inject = ["slots"]` remains the Cordis service dependency. Keep `immediately: true` while the plugin contributes controls expected on initial Web UI boot.
 - `components.tsx` contains top-level static presentation components. Keep data loading, autosave, and modal-local state in `scope-modal.tsx`; do not recreate nested render-component functions inside it.
 - Do not grow either entry back into a monolith. Split by ownership/responsibility only; do not create one-file-per-function layers.
 
