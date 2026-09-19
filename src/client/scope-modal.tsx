@@ -6,12 +6,6 @@ import type { OverviewData, ScopeDraft, ScopeModalProps } from "./model.js";
 import css from "./styles.module.css";
 import { callHost } from "./transport.js";
 
-function mainSession(state: any): any | undefined {
-  return Object.values(state?.byId ?? {}).find(
-    (row: any) => (row?.retainedBy?.mainView ?? 0) > 0,
-  );
-}
-
 export function ScopeModalSeat(props: ScopeModalProps) {
   const open = useModalOpen();
   return open ? <ScopeModal {...props} /> : null;
@@ -28,9 +22,16 @@ function ScopeModal(props: ScopeModalProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const sessionRef = useRef<string | undefined>(undefined);
 
-  const sessionId = props.useSessions?.((state: any) => mainSession(state)?.id as string | undefined) as string | undefined;
-  const agentPreset = props.useSessions?.((state: any) =>
-    mainSession(state)?.projectionValues?.agentPreset as string | null | undefined) as string | null | undefined;
+  const sessionId = props.useSessions((state) =>
+    Object.values(state.byId).find(
+      (row) => (row.retainedBy.mainView ?? 0) > 0,
+    )?.id,
+  );
+  const agentPreset = props.useSessions((state) =>
+    Object.values(state.byId).find(
+      (row) => (row.retainedBy.mainView ?? 0) > 0,
+    )?.projectionValues?.agentPreset,
+  );
 
   useEffect(() => {
     sessionRef.current = sessionId;
