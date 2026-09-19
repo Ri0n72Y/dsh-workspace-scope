@@ -2,7 +2,7 @@
 /**
  * Client behavior tests. They mount through the real plugin entry (apply +
  * slots registration), mock only the RPC boundary (host.call) and the
- * framework hook (useSessions), and assert user-visible behavior: dialog
+ * framework session/global slot props, and assert user-visible behavior: dialog
  * content, counts, switch states, save feedback. No class-name or style
  * assertions (dsh convention, packages/client/AGENTS.md: component specs
  * assert user-visible behavior).
@@ -33,31 +33,46 @@ function makeOverview(over: Partial<OverviewData> = {}): OverviewData {
 }
 
 type UseSessions = (sel: (s: unknown) => unknown) => unknown
+type UseSession = (sel: (s: unknown) => unknown) => unknown
+
+interface ClientProps {
+  sessionId?: string
+  useSession?: UseSession
+  useSessions?: UseSessions
+}
 
 function sessions(
   sessionId: string | undefined,
   blank: boolean,
   agentPreset?: string,
-): UseSessions {
-  return (sel) => sel({
-    current: sessionId,
-    byId: sessionId === undefined
-      ? {}
-      : {
-          [sessionId]: {
-            blank,
-            projectionValues: agentPreset === undefined ? {} : { agentPreset },
-          },
-        },
-  })
+): ClientProps {
+  const row = sessionId === undefined
+    ? undefined
+    : {
+        id: sessionId,
+        blank,
+        retainedBy: { mainView: 1 },
+        projectionValues: agentPreset === undefined ? {} : { agentPreset },
+      }
+  return {
+    sessionId,
+    useSession: sessionId === undefined ? undefined : (sel) => sel({ blank }),
+    useSessions: (sel) => sel({
+      ids: sessionId === undefined ? [] : [sessionId],
+      byId: row === undefined ? {} : { [sessionId!]: row },
+      phase: 'ready',
+      subagentsByParent: {},
+      jobsBySession: {},
+    }),
+  }
 }
 
 interface Mounted {
   hostCall: ReturnType<typeof vi.fn>
   /** Render the blank-session entry chip. */
-  renderEntry: (useSessions?: UseSessions) => void
-  renderModal: (useSessions?: UseSessions) => void
-  rerenderModal: (useSessions?: UseSessions) => void
+  renderEntry: (props?: ClientProps) => void
+  renderModal: (props?: ClientProps) => void
+  rerenderModal: (props?: ClientProps) => void
 }
 
 /** Fresh module per test (the modal open state is module-scoped), then mount
@@ -97,15 +112,15 @@ async function mount(hostImpl?: (method: string, args: unknown) => Promise<unkno
 
   return {
     hostCall,
-    renderEntry: (useSessions) => {
-      render(seat('conversation.input.right')({ useSessions }) as ReactElement)
+    renderEntry: (props) => {
+      render(seat('conversation.input.right')(props ?? {}) as ReactElement)
     },
-    renderModal: (useSessions) => {
-      modalView = render(modalRenderer({ useSessions }) as ReactElement)
+    renderModal: (props) => {
+      modalView = render(modalRenderer(props ?? {}) as ReactElement)
     },
-    rerenderModal: (useSessions) => {
+    rerenderModal: (props) => {
       if (!modalView) throw new Error('modal not rendered yet')
-      modalView.rerender(modalRenderer({ useSessions }) as ReactElement)
+      modalView.rerender(modalRenderer(props ?? {}) as ReactElement)
     },
   }
 }
