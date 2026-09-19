@@ -73,7 +73,7 @@ const prelude = [
   'const __WSC_STYLE_ID__ = "dsh-workspace-scope/styles.module.css";',
   'if (typeof document !== "undefined" && document.querySelector(`style[data-plugin-css="${__WSC_STYLE_ID__}"]`) === null) {',
   '  const tag = document.createElement("style");',
-  '  tag.dataset.plugin = "workspace-scope";',
+  '  tag.dataset.plugin = "dsh-workspace-scope";',
   '  tag.dataset.pluginCss = __WSC_STYLE_ID__;',
   '  tag.textContent = __WSC_STYLESHEET__;',
   '  document.head.appendChild(tag);',
