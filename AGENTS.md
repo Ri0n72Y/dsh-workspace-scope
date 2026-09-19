@@ -28,7 +28,8 @@ Keep the two public entries as composition roots rather than feature containers.
   - `runtime-policy.ts`: Agent policy lifecycle and DSH event wiring
   - `types.ts`: shared structural types
 - `src/client/index.tsx`: Web slot registration only. Client behavior lives under `src/client/`: `scope-modal.tsx`, `components.tsx`, `model.ts`, `transport.ts`, `modal-state.tsx`, and `styles.module.css`; `css.d.ts` only supplies the CSS Module import type.
-- DSH 0.1.6 client manifest rule: `dsh.client.inject` contains dynamic client package edges, not runtime services or static platform modules. This plugin depends on the slot owners `@deepseek-ai/dsh-client-ui-conversation` and `@deepseek-ai/dsh-client-ui-layout`; runtime `export const inject = ["slots"]` remains the Cordis service dependency. Keep `immediately: true` while the plugin contributes controls expected on initial Web UI boot.
+- DSH 0.1.6 client manifest rule: `dsh.client.inject` records package dependency edges; it does not sequence Client activation. This plugin records the two slot-owner packages it contributes to, while runtime `export const inject = ["slots"]` and `ctx.slots.inject(...)` own service/declaration waiting. Do not add `immediately: true` for this ordinary feature UI.
+- DSH 0.1.6 removed `SessionListState.current`. Session-scoped entries read their bound `sessionId` / `useSession`; the root-scoped overlay resolves the main Session from `retainedBy.mainView`, matching the upstream Client selection model. Do not reconstruct a `current` field locally.
 - `components.tsx` contains top-level static presentation components. Keep data loading, autosave, and modal-local state in `scope-modal.tsx`; do not recreate nested render-component functions inside it.
 - Do not grow either entry back into a monolith. Split by ownership/responsibility only; do not create one-file-per-function layers.
 
