@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { CapabilityRow, SearchIcon, SectionHeading } from "./components.js";
 import { setModalOpen, useModalOpen } from "./modal-state.js";
 import { draftFromConfig, policyEnabled, setAllCapabilities, toggleCapability } from "./model.js";
-import type { DockProps, OverviewData, ScopeDraft } from "./model.js";
+import type { OverviewData, ScopeDraft, ScopeModalProps } from "./model.js";
 import css from "./styles.module.css";
 import { callHost } from "./transport.js";
 
@@ -12,12 +12,12 @@ function mainSession(state: any): any | undefined {
   );
 }
 
-export function ScopeModalSeat(props: DockProps) {
+export function ScopeModalSeat(props: ScopeModalProps) {
   const open = useModalOpen();
   return open ? <ScopeModal {...props} /> : null;
 }
 
-function ScopeModal(props: DockProps) {
+function ScopeModal(props: ScopeModalProps) {
   const [data, setData] = useState<OverviewData | null>(null);
   const [draft, setDraft] = useState<ScopeDraft | null>(null);
   const [query, setQuery] = useState("");
