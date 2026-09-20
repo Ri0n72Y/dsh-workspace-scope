@@ -1,6 +1,6 @@
 // Generates the import-free dynamic client artifact from the same split source
 // modules used by the static bundle. The plugin-dev-loop sandbox provides
-// ambient React/host/ctx bindings and does not support module imports.
+// ambient React/host/styles/ctx bindings and does not support module imports.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -67,17 +67,11 @@ const prelude = [
   '// @ts-nocheck',
   '/* eslint-disable */',
   'declare const React: any;',
+  'declare const styles: { insert(css: string): () => void };',
   'const { createElement, useEffect, useId, useRef, useState, useSyncExternalStore } = React;',
   `const css = ${JSON.stringify(classes)};`,
   `const __WSC_STYLESHEET__ = ${JSON.stringify(stylesheet)};`,
-  'const __WSC_STYLE_ID__ = "dsh-workspace-scope/styles.module.css";',
-  'if (typeof document !== "undefined" && document.querySelector(`style[data-plugin-css="${__WSC_STYLE_ID__}"]`) === null) {',
-  '  const tag = document.createElement("style");',
-  '  tag.dataset.plugin = "workspace-scope";',
-  '  tag.dataset.pluginCss = __WSC_STYLE_ID__;',
-  '  tag.textContent = __WSC_STYLESHEET__;',
-  '  document.head.appendChild(tag);',
-  '}',
+  'styles.insert(__WSC_STYLESHEET__);',
   '',
 ].join('\n')
 const out = prelude + source + '\n'

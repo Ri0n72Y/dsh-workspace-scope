@@ -1,5 +1,5 @@
 import React, { useId } from "react";
-import type { DockProps } from "./model.js";
+import type { ScopeBarProps } from "./model.js";
 import { setModalOpen, useModalOpen } from "./modal-state.js";
 import css from "./styles.module.css";
 
@@ -48,15 +48,9 @@ export function WscSwitch(props: { checked: boolean; onToggle: () => void; label
   );
 }
 
-export function ScopeBar(props: DockProps) {
+export function ScopeBar(props: ScopeBarProps) {
   const open = useModalOpen();
-  const blank = props.useSessions !== undefined
-    ? props.useSessions((state: any) => {
-        if (!state.current) return undefined;
-        const row = state.byId[state.current];
-        return row ? !!row.blank : undefined;
-      })
-    : false;
+  const blank = props.useSession((state) => state.blank);
   if (blank !== true) return null;
   return (
     <button type="button" className={css.chip} onClick={() => setModalOpen(!open)} aria-expanded={open} title="按工作区限制当前 Agent 的 Skill 与 Host 全局 MCP">

@@ -41,12 +41,16 @@ function clientCssModule() {
         `const css = ${JSON.stringify(CLIENT_CSS)};`,
         `const classes = ${JSON.stringify(CLIENT_CLASSES)};`,
         'const tagId = "dsh-workspace-scope/styles.module.css";',
-        "if (typeof document !== \"undefined\" && document.querySelector('style[data-plugin-css=\"' + tagId + '\"]') === null) {",
-        '  const tag = document.createElement("style");',
-        '  tag.dataset.plugin = "workspace-scope";',
-        "  tag.dataset.pluginCss = tagId;",
+        'const ownerId = "dsh-workspace-scope";',
+        "if (typeof document !== \"undefined\") {",
+        "  let tag = document.querySelector('style[data-plugin-css=\"' + tagId + '\"]');",
+        "  if (tag === null) {",
+        '    tag = document.createElement("style");',
+        "    tag.dataset.pluginCss = tagId;",
+        "    document.head.appendChild(tag);",
+        "  }",
+        "  tag.dataset.plugin = ownerId;",
         "  tag.textContent = css;",
-        "  document.head.appendChild(tag);",
         "}",
         "export default classes;",
       ].join("\n");
@@ -54,23 +58,10 @@ function clientCssModule() {
   };
 }
 
-/**
- * Platform modules the browser module table shares (mirrors
- * packages/client/web/src/platform.ts in the harness repo, plus the runtime
- * client exemption). Client bundle code may only import these at runtime.
- */
+/** Shared module-table imports emitted by this Client bundle. */
 const CLIENT_EXTERNALS = [
   "react",
   "react/jsx-runtime",
-  "react-dom",
-  "react-dom/client",
-  "@deepseek-ai/cordis",
-  "@deepseek-ai/dsh-client-ui-slots",
-  "@deepseek-ai/dsh-client-web-react",
-  "@deepseek-ai/dsh-client-ui-primitives",
-  "@deepseek-ai/dsh-client-ui-attachment",
-  "@deepseek-ai/dsh-client-schema-form",
-  "@deepseek-ai/dsh-client-runtime/client",
 ];
 
 export default defineConfig([

@@ -1,17 +1,18 @@
 import React, { useEffect, useRef, useState } from "react";
+import type {} from "@deepseek-ai/dsh-agent-presets/types";
 import { CapabilityRow, SearchIcon, SectionHeading } from "./components.js";
 import { setModalOpen, useModalOpen } from "./modal-state.js";
 import { draftFromConfig, policyEnabled, setAllCapabilities, toggleCapability } from "./model.js";
-import type { DockProps, OverviewData, ScopeDraft } from "./model.js";
+import type { OverviewData, ScopeDraft, ScopeModalProps } from "./model.js";
 import css from "./styles.module.css";
 import { callHost } from "./transport.js";
 
-export function ScopeModalSeat(props: DockProps) {
+export function ScopeModalSeat(props: ScopeModalProps) {
   const open = useModalOpen();
   return open ? <ScopeModal {...props} /> : null;
 }
 
-function ScopeModal(props: DockProps) {
+function ScopeModal(props: ScopeModalProps) {
   const [data, setData] = useState<OverviewData | null>(null);
   const [draft, setDraft] = useState<ScopeDraft | null>(null);
   const [query, setQuery] = useState("");
@@ -22,11 +23,13 @@ function ScopeModal(props: DockProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const sessionRef = useRef<string | undefined>(undefined);
 
-  const sessionId = props.useSessions?.((state: any) => state.current as string | undefined) as string | undefined;
-  const agentPreset = props.useSessions?.((state: any) => {
-    if (!state.current) return undefined;
-    return state.byId[state.current]?.projectionValues?.agentPreset as string | undefined;
-  }) as string | undefined;
+  const mainSession = props.useSessions((state) =>
+    Object.values(state.byId).find(
+      (row) => (row.retainedBy.mainView ?? 0) > 0,
+    ),
+  );
+  const sessionId = mainSession?.id;
+  const agentPreset = mainSession?.projectionValues?.agentPreset;
 
   useEffect(() => {
     sessionRef.current = sessionId;
