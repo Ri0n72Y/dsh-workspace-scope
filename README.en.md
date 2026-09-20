@@ -1,12 +1,15 @@
 # dsh-workspace-scope
 
-[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-0.1.6--alpha.2-2ea44f)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.6-alpha.2) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
+[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DSH compatibility](https://img.shields.io/badge/DSH%20tested%20only-0.1.6--alpha.2-f59e0b)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.6-alpha.2) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
 
 Enable or disable the current Agent's existing Skills and inherited Host-global MCP servers per DeepSeek Harness workspace.
 
 This plugin only controls capability scope. It does not install, discover, or provide Skills or MCP servers. Each workspace can expose a different capability set through its own `.dsh-scope.json`.
 
 中文版：[README.md](README.md)
+
+> [!IMPORTANT]
+> `dsh-workspace-scope v0.5.2` is **adapted and tested only with DeepSeek Harness `0.1.6-alpha.2`**. This does not mean “compatible with `0.1.6-alpha.2` and all later releases.” Future DSH versions may change Client or Host contracts again; validate compatibility before upgrading DSH independently.
 
 ## Install
 

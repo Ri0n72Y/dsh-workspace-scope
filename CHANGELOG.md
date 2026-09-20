@@ -4,9 +4,14 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-20
+
+> **Compatibility:** v0.5.2 is adapted and tested only with DeepSeek Harness `0.1.6-alpha.2`. Compatibility with later DSH releases is not guaranteed and should be validated independently before upgrading DSH.
+
 ### Fixed
 - Restored the browser UI on DeepSeek Harness `0.1.6-alpha.2` after the Client Session list removed its synthetic `current` field: the session-scoped chip now reads its bound Session directly, while the root overlay follows DSH's `retainedBy.mainView` ownership signal.
 - Updated Client package-edge metadata for the slots this plugin contributes to, aligned static stylesheet ownership with the alpha.2 package lifecycle (including retagging an existing 0.5.1 style node), and moved dynamic hot-test CSS to the runner-owned `styles.insert()` lifecycle.
+- Replaced local Client slot/state typing patches with DSH's public `PropsRuntime` contract and explicit type-only dependencies required by the alpha.2 declaration chain, so selector state is inferred from the official Session contracts instead of silently degrading to `any`.
 
 ## [0.5.1] - 2026-09-12
 
