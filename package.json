@@ -73,6 +73,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/dsh-agent-presets": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-api-session-controller": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-client-store": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-client-ui-conversation": "0.1.6-alpha.2",
