@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-20
+
+> **Compatibility:** v0.5.2 is adapted and tested only with DeepSeek Harness `0.1.6-alpha.2`. Compatibility with later DSH releases is not guaranteed and should be validated independently before upgrading DSH.
+
+### Fixed
+- Restored the browser UI on DeepSeek Harness `0.1.6-alpha.2` after the Client Session list removed its synthetic `current` field: the session-scoped chip now reads its bound Session directly, while the root overlay follows DSH's `retainedBy.mainView` ownership signal.
+- Updated Client package-edge metadata for the slots this plugin contributes to, aligned static stylesheet ownership with the alpha.2 package lifecycle (including retagging an existing 0.5.1 style node), and moved dynamic hot-test CSS to the runner-owned `styles.insert()` lifecycle.
+- Replaced local Client slot/state typing patches with DSH's public `PropsRuntime` contract and explicit type-only dependencies required by the alpha.2 declaration chain, so selector state is inferred from the official Session contracts instead of silently degrading to `any`.
+
 ## [0.5.1] - 2026-09-12
 
 ### Changed
@@ -16,6 +25,8 @@ All notable changes to this project are documented in this file. The format is b
 - Agent-scoped Tool restriction access uses the same scoped `ctx.get("tools")` seam for consistency without introducing a per-Agent inject fiber, service cache, or extra lifecycle layer.
 
 ## [0.5.0] - 2026-09-09
+
+> **Deprecated / known-bad:** v0.5.0 can fail on the first model turn with Cordis' `cannot get property "skills" without inject` error ([#22](https://github.com/Ri0n72Y/dsh-workspace-scope/issues/22)). Use v0.5.1 or later.
 
 ### Added
 - Added `docs/architecture.md` with C4 and end-to-end Skill/Tool data flows for the DSH 0.1.5 scope model, including Agent Preset composition, layered `SkillRegistry`, `tool-skill`, `ToolRuntime`, and workspace policy insertion points.

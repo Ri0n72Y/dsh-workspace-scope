@@ -1,38 +1,31 @@
 /** dsh-workspace-scope — Client entry and slot registration. */
 import { createElement } from "react";
 import type { Context } from "@deepseek-ai/cordis";
+import type {} from "@deepseek-ai/dsh-client-ui-renderer/client";
 import { ScopeBar } from "./components.js";
-import type { DockProps } from "./model.js";
+import type { ScopeBarProps, ScopeModalProps } from "./model.js";
 import { ScopeModalSeat } from "./scope-modal.js";
 
 export const name = "workspace-scope-client";
 export const inject = ["slots"];
 
 export function apply(ctx: Context): void {
-  const slots = ctx.get("slots") as
-    | {
-        inject(key: string, callback: () => unknown): unknown;
-        register(options: Record<string, unknown>, component: unknown): unknown;
-      }
-    | undefined;
-  if (slots === undefined) return;
-
-  slots.inject("conversation.input.right", () =>
-    slots.register(
+  ctx.slots.inject("conversation.input.right", () =>
+    ctx.slots.register(
       {
         name: "conversation.input.right",
         id: "workspace-scope",
         order: 30,
-        label: () => "工作区能力",
+        label: "工作区能力",
       },
-      (props: unknown) => createElement(ScopeBar, props as DockProps),
+      (props: ScopeBarProps) => createElement(ScopeBar, props),
     ),
   );
 
-  slots.inject("shell.overlay", () =>
-    slots.register(
+  ctx.slots.inject("shell.overlay", () =>
+    ctx.slots.register(
       { name: "shell.overlay", id: "workspace-scope-modal", order: 50 },
-      (props: unknown) => createElement(ScopeModalSeat, props as DockProps),
+      (props: ScopeModalProps) => createElement(ScopeModalSeat, props),
     ),
   );
 }
