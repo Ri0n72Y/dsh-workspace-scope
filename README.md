@@ -9,7 +9,7 @@
 English: [README.en.md](README.en.md)
 
 > [!IMPORTANT]
-> `dsh-workspace-scope v0.5.2` **仅针对 DeepSeek Harness `0.1.6-alpha.2` 完成适配与实测**。这不是“`0.1.6-alpha.2` 及以上均兼容”的声明；后续 DSH 版本可能继续调整 Client / Host contract，升级 DSH 前请单独验证本插件兼容性。
+> `dsh-workspace-scope v0.5.3` **仅针对 DeepSeek Harness `0.1.6-alpha.2` 完成适配与实测**。这不是“`0.1.6-alpha.2` 及以上均兼容”的声明；后续 DSH 版本可能继续调整 Client / Host contract，升级 DSH 前请单独验证本插件兼容性。
 
 ## 安装
 

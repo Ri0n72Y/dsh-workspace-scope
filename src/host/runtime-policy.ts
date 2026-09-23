@@ -9,6 +9,7 @@ import type {
   PromptAssemblyLike,
   ScopeConfig,
   ScopedToolsLike,
+  SkillAccess,
   SkillsServiceLike,
   SystemPromptLike,
   ToolsServiceLike,
@@ -27,10 +28,11 @@ interface RuntimePolicyDeps {
   skills: SkillsServiceLike;
   tools: ToolsServiceLike;
   systemPrompt: SystemPromptLike;
+  skillAccess: SkillAccess;
 }
 
 export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): void {
-  const { configStore, skills, tools, systemPrompt } = deps;
+  const { configStore, skills, tools, systemPrompt, skillAccess } = deps;
   const activePolicies = new Map<string, ActivePolicy>();
   const onEvent = ctx.on as unknown as (
     name: string,
@@ -115,16 +117,22 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
         throw new Error("dsh-workspace-scope: workspace policy is not initialized");
       }
 
-      const previous = active.skillDispose;
-      delete active.skillDispose;
-      dispose(previous);
-      active.skillDispose = await installSkillPolicy(
-        skills,
-        tools,
-        payload.agent,
-        active.config,
-        payload.signal,
-      );
+      await skillAccess(async () => {
+        // Keep the previous shadow installed while queued. Once this Agent owns
+        // the registry transaction, expose the underlying catalog, rebuild the
+        // shadows, and verify them before any downstream pre-step consumer runs.
+        payload.signal.throwIfAborted();
+        const previous = active.skillDispose;
+        delete active.skillDispose;
+        dispose(previous);
+        active.skillDispose = await installSkillPolicy(
+          skills,
+          tools,
+          payload.agent,
+          active.config,
+          payload.signal,
+        );
+      });
       return next();
     },
     { prepend: true },

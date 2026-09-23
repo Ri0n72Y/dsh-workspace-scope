@@ -6,6 +6,7 @@ import type {
   AgentsServiceLike,
   ConfigStore,
   ScopeConfig,
+  SkillAccess,
   SkillsServiceLike,
   ToolsServiceLike,
   WebServerLike,
@@ -24,10 +25,11 @@ interface WorkspaceApiDeps {
   skills: SkillsServiceLike;
   tools: ToolsServiceLike;
   configStore: ConfigStore;
+  skillAccess: SkillAccess;
 }
 
 export function createWorkspaceApi(deps: WorkspaceApiDeps): WorkspaceApi {
-  const { agents, skills, tools, configStore } = deps;
+  const { agents, skills, tools, configStore, skillAccess } = deps;
 
   function resolveAgent(sessionId: string): AgentLike | undefined {
     return sessionId === "" ? undefined : agents.get(sessionId);
@@ -42,7 +44,7 @@ export function createWorkspaceApi(deps: WorkspaceApiDeps): WorkspaceApi {
     // visible to this Agent. Exact private tool-skill identity remains outside
     // the public seam, so scoped presence is the narrowest supported gate.
     if (agent !== undefined && tools.get("skill", agent) !== undefined) {
-      const snapshot = await skills.snapshot({ scope: agent, cwd });
+      const snapshot = await skillAccess(() => skills.snapshot({ scope: agent, cwd }));
       if (!snapshot.complete) {
         throw new Error("dsh-workspace-scope: skill catalog is incomplete");
       }
