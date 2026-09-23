@@ -8,6 +8,7 @@ import type {
   AgentsServiceLike,
   FsServiceLike,
   SkillsServiceLike,
+  SkillAccess,
   SystemPromptLike,
   ToolsServiceLike,
   WebServerLike,
@@ -29,9 +30,27 @@ export function apply(ctx: Context): void {
   const systemPrompt = ctx.get("systemPrompt") as SystemPromptLike;
 
   const configStore = createConfigStore(ctx, fs);
-  registerRuntimePolicy(ctx, { configStore, skills, tools, systemPrompt });
 
-  const api = createWorkspaceApi({ agents, skills, tools, configStore });
+  // SkillRegistry uses one service-wide revision. Keep this plugin's own
+  // dispose/snapshot/register/verify transactions from invalidating each other
+  // when sibling Agents enter pre-step concurrently. The queue is per plugin
+  // instance and never serializes downstream Agent work.
+  let skillTail = Promise.resolve();
+  const skillAccess: SkillAccess = async <T>(operation: () => Promise<T>): Promise<T> => {
+    const previous = skillTail;
+    let release!: () => void;
+    skillTail = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  };
+
+  registerRuntimePolicy(ctx, { configStore, skills, tools, systemPrompt, skillAccess });
+
+  const api = createWorkspaceApi({ agents, skills, tools, configStore, skillAccess });
   registerHttpApi(ctx, webServer, api);
 
   if (typeof harness !== "undefined") {
