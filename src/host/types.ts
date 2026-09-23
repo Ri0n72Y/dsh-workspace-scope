@@ -44,6 +44,8 @@ export interface SkillsServiceLike {
   get(name: string, options: unknown): Promise<SkillDefinitionLike | undefined>;
 }
 
+export type SkillAccess = <T>(operation: () => Promise<T>) => Promise<T>;
+
 export interface ScopedSkillsLike {
   register(skill: SkillDefinitionLike): () => void;
 }
