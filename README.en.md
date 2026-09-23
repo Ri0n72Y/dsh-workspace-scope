@@ -9,7 +9,7 @@ This plugin only controls capability scope. It does not install, discover, or pr
 中文版：[README.md](README.md)
 
 > [!IMPORTANT]
-> `dsh-workspace-scope v0.5.2` is **adapted and tested only with DeepSeek Harness `0.1.6-alpha.2`**. This does not mean “compatible with `0.1.6-alpha.2` and all later releases.” Future DSH versions may change Client or Host contracts again; validate compatibility before upgrading DSH independently.
+> `dsh-workspace-scope v0.5.3` is **adapted and tested only with DeepSeek Harness `0.1.6-alpha.2`**. This does not mean “compatible with `0.1.6-alpha.2` and all later releases.” Future DSH versions may change Client or Host contracts again; validate compatibility before upgrading DSH independently.
 
 ## Install
 

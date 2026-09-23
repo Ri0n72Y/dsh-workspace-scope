@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-09-23
+
+> **Compatibility:** v0.5.3 remains targeted and tested only with DeepSeek Harness `0.1.6-alpha.2`; it does not expand the supported DSH version range.
+
+### Fixed
+- Serialized this plugin's SkillRegistry policy refresh transactions across concurrent Agents so one Agent's shadow disposal/registration cannot invalidate another Agent's in-flight catalog snapshot and fail the turn with `skill catalog is incomplete` ([#28](https://github.com/Ri0n72Y/dsh-workspace-scope/issues/28)).
+- Routed management overview Skill snapshots through the same plugin-instance queue, preventing UI reads from racing the plugin's own registry revision churn while preserving the existing fail-closed behavior for genuinely incomplete provider observations.
+
 ## [0.5.2] - 2026-09-20
 
 > **Compatibility:** v0.5.2 is adapted and tested only with DeepSeek Harness `0.1.6-alpha.2`. Compatibility with later DSH releases is not guaranteed and should be validated independently before upgrading DSH.
