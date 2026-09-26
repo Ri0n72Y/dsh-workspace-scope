@@ -21,7 +21,13 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --no-frozen-lockfile
+      - if: matrix.os == 'ubuntu-latest'
+        run: |
+          echo LOCKFILE_BEGIN
+          base64 -w0 pnpm-lock.yaml
+          echo
+          echo LOCKFILE_END
       - run: pnpm run check
       - run: pnpm run gen:dynamic
       - run: pnpm test
