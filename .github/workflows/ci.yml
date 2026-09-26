@@ -25,7 +25,7 @@ jobs:
       - if: matrix.os == 'ubuntu-latest'
         run: |
           echo LOCKFILE_BEGIN
-          base64 -w0 pnpm-lock.yaml
+          git diff -- pnpm-lock.yaml
           echo
           echo LOCKFILE_END
       - run: pnpm run check
