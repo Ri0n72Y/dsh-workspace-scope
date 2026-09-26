@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import type {} from "@deepseek-ai/dsh-agent-presets/types";
+import type {} from "@deepseek-ai/dsh-agent-preset-registry/types";
 import { CapabilityRow, SearchIcon, SectionHeading } from "./components.js";
 import { setModalOpen, useModalOpen } from "./modal-state.js";
 import { draftFromConfig, policyEnabled, setAllCapabilities, toggleCapability } from "./model.js";
