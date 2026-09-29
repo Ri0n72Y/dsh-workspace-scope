@@ -1,6 +1,6 @@
 # dsh-workspace-scope
 
-[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DSH compatibility](https://img.shields.io/badge/DSH%20tested%20only-0.1.6--alpha.2-f59e0b)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.6-alpha.2) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
+[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DSH compatibility](https://img.shields.io/badge/DSH%20target-0.2.0--rc.2-f59e0b)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.0-rc.2) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
 
 为 DeepSeek Harness 按工作区启用或禁用当前 Agent 已拥有的 Skill 与 Host 全局 MCP。
 
@@ -9,7 +9,7 @@
 English: [README.en.md](README.en.md)
 
 > [!IMPORTANT]
-> `dsh-workspace-scope v0.5.3` **仅针对 DeepSeek Harness `0.1.6-alpha.2` 完成适配与实测**。这不是“`0.1.6-alpha.2` 及以上均兼容”的声明；后续 DSH 版本可能继续调整 Client / Host contract，升级 DSH 前请单独验证本插件兼容性。
+> `dsh-workspace-scope v0.5.4` **面向 DeepSeek Harness `0.2.0-rc.2` 适配**。Web 侧已通过该版本依赖图的 frozen install、类型检查、构建与回归测试。Desktop `0.2.0-rc.2` 复用同一 Web 应用、Host 与插件管理链路，因此当前代码不需要 Electron 专用适配；正式标记桌面实测前，仍建议在已打包 Desktop 中完成一次安装与 UI/策略 smoke。
 
 ## 安装
 
@@ -24,6 +24,8 @@ dsh plugin --profile web add dsh-workspace-scope
 ```sh
 dsh plugin --profile web remove dsh-workspace-scope
 ```
+
+Desktop `0.2.0-rc.2` 请从侧栏 **插件** 页面安装 `dsh-workspace-scope`。Desktop 使用保留的 `desktop` profile，公开 CLI 不直接管理该 profile；插件管理器会使用 Desktop 自己的 profile 与 pnpm 安装链路。
 
 ## 使用
 
