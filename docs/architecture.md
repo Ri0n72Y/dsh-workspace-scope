@@ -1,6 +1,6 @@
 # Architecture and data flow
 
-This document describes the integration boundary of `dsh-workspace-scope` against DeepSeek Harness `0.1.6-alpha.2`. The diagrams use C4-style levels with ordinary Mermaid flowcharts so they render on GitHub without requiring the Mermaid C4 extension.
+This document describes the integration boundary of `dsh-workspace-scope` against DeepSeek Harness `0.2.0-rc.2`. The diagrams use C4-style levels with ordinary Mermaid flowcharts so they render on GitHub without requiring the Mermaid C4 extension.
 
 ## Scope
 
@@ -15,7 +15,7 @@ The plugin does not install Skills, discover Skill files itself, create a second
 
 On the Web Client, `dsh.client.inject` records package dependency edges but does not sequence activation. The plugin lists the two slot-owner packages it contributes to (`@deepseek-ai/dsh-client-ui-conversation` and `@deepseek-ai/dsh-client-ui-layout`); runtime `inject = ["slots"]` and `ctx.slots.inject(...)` remain the service/declaration lifecycle seams.
 
-DSH `0.1.6-alpha.2` no longer carries a synthetic `current` field in `SessionListState`. The `conversation.input.right` entry reads blank state from its session-scoped `useSession` seat. The root-scoped `shell.overlay` cannot receive session-scoped props, so it resolves the main Session from the list row whose `retainedBy.mainView` count is positive, the same ownership signal used by DSH workspace navigation. Preset changes are read from that row's `projectionValues.agentPreset` so the open modal refreshes without inventing another cross-scope store.
+DSH `0.2.0-rc.2` keeps the post-0.1.6 Session contract without a synthetic `current` field in `SessionListState`. The `conversation.input.right` entry reads blank state from its session-scoped `useSession` seat. The root-scoped `shell.overlay` cannot receive session-scoped props, so it resolves the main Session from the list row whose `retainedBy.mainView` count is positive, the same ownership signal used by DSH workspace navigation. Preset changes are read from that row's `projectionValues.agentPreset` so the open modal refreshes without inventing another cross-scope store.
 
 ## C4 — system context
 

@@ -9,7 +9,7 @@ This plugin only controls capability scope. It does not install, discover, or pr
 中文版：[README.md](README.md)
 
 > [!IMPORTANT]
-> `dsh-workspace-scope v0.5.4` **targets DeepSeek Harness `0.2.0-rc.2`**. The Web surface is validated against that dependency graph with frozen install, typecheck, build, and regression tests. Desktop `0.2.0-rc.2` reuses the same Web application, Host, and plugin-management path, so no Electron-specific adapter is currently required; complete one packaged-Desktop install/UI/policy smoke before treating Desktop support as field-tested.
+> `dsh-workspace-scope v0.5.4` **targets DeepSeek Harness `0.2.0-rc.2`**. The Web surface has passed install, typecheck, build, and regression tests against the real dependency graph; the final frozen install is currently blocked only by pnpm's 24-hour new-release cooldown. Desktop `0.2.0-rc.2` reuses the same Web application, Host, and plugin-management path, so no Electron-specific adapter is currently required; complete one packaged-Desktop install/UI/policy smoke before treating Desktop support as field-tested.
 
 ## Install
 
