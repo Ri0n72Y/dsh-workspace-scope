@@ -1,6 +1,6 @@
 # dsh-workspace-scope
 
-[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DSH compatibility](https://img.shields.io/badge/DSH%20target-0.2.0--rc.2-f59e0b)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.0-rc.2) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
+[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DSH compatibility](https://img.shields.io/badge/DSH%20baseline-0.2.0--rc.2-f59e0b)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.0-rc.2) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
 
 为 DeepSeek Harness 按工作区启用或禁用当前 Agent 已拥有的 Skill 与 Host 全局 MCP。
 
@@ -9,7 +9,7 @@
 English: [README.en.md](README.en.md)
 
 > [!IMPORTANT]
-> `dsh-workspace-scope v0.5.4` **面向 DeepSeek Harness `0.2.0-rc.2` 适配**。Web 侧已在该版本真实依赖图上通过安装、类型检查、构建与回归测试；最终 frozen install 当前仅受 pnpm 的 24 小时新版本冷却策略阻塞。Desktop `0.2.0-rc.2` 复用同一 Web 应用、Host 与插件管理链路，因此当前代码不需要 Electron 专用适配；正式标记桌面实测前，仍建议在已打包 Desktop 中完成一次安装与 UI/策略 smoke。
+> `dsh-workspace-scope v0.5.4` **以 DeepSeek Harness `0.2.0-rc.2` 为已验证基线，并默认允许后续 DSH 版本加载**。兼容 peer 使用 `@deepseek-ai/dsh >=0.2.0-rc.2`，不再把具体 Client contract 包当作 DSH 版本门槛；后续版本属于向上兼容策略，不代表逐版本实测。Web 侧已在 `0.2.0-rc.2` 真实依赖图上通过安装、类型检查、构建与回归测试；最终 frozen install 当前仅受 pnpm 的 24 小时新版本冷却策略阻塞。Desktop `0.2.0-rc.2` 复用同一 Web 应用、Host 与插件管理链路，因此当前代码不需要 Electron 专用适配；正式标记桌面实测前，仍建议在已打包 Desktop 中完成一次安装与 UI/策略 smoke。
 
 ## 安装
 
