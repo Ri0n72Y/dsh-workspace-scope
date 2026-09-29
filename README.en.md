@@ -1,6 +1,6 @@
 # dsh-workspace-scope
 
-[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DSH compatibility](https://img.shields.io/badge/DSH%20tested%20only-0.1.6--alpha.2-f59e0b)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.6-alpha.2) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
+[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DSH compatibility](https://img.shields.io/badge/DSH%20target-0.2.0--rc.2-f59e0b)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.0-rc.2) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
 
 Enable or disable the current Agent's existing Skills and inherited Host-global MCP servers per DeepSeek Harness workspace.
 
@@ -9,7 +9,7 @@ This plugin only controls capability scope. It does not install, discover, or pr
 中文版：[README.md](README.md)
 
 > [!IMPORTANT]
-> `dsh-workspace-scope v0.5.3` is **adapted and tested only with DeepSeek Harness `0.1.6-alpha.2`**. This does not mean “compatible with `0.1.6-alpha.2` and all later releases.” Future DSH versions may change Client or Host contracts again; validate compatibility before upgrading DSH independently.
+> `dsh-workspace-scope v0.5.4` **targets DeepSeek Harness `0.2.0-rc.2`**. The Web surface is validated against that dependency graph with frozen install, typecheck, build, and regression tests. Desktop `0.2.0-rc.2` reuses the same Web application, Host, and plugin-management path, so no Electron-specific adapter is currently required; complete one packaged-Desktop install/UI/policy smoke before treating Desktop support as field-tested.
 
 ## Install
 
@@ -24,6 +24,8 @@ Remove it with:
 ```sh
 dsh plugin --profile web remove dsh-workspace-scope
 ```
+
+For Desktop `0.2.0-rc.2`, install `dsh-workspace-scope` from the sidebar **Plugins** page. Desktop owns the reserved `desktop` profile, so the public CLI does not manage that profile directly; the Plugin Manager uses Desktop's own profile and pnpm installation path.
 
 ## Usage
 
