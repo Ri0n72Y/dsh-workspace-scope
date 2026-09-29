@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Changed
+- Target DeepSeek Harness `0.2.0-rc.2` across the Client contract/type dependencies while retaining Cordis `4.0.4`.
+- Document Desktop `0.2.0-rc.2` compatibility boundaries: Desktop loads external plugins from its reserved profile and reuses the shared Web application/Host path, so no Electron-specific plugin surface is required; packaged-Desktop smoke remains the final field verification step.
+
 ## [0.5.3] - 2026-09-23
 
 > **Compatibility:** v0.5.3 remains targeted and tested only with DeepSeek Harness `0.1.6-alpha.2`; it does not expand the supported DSH version range.
