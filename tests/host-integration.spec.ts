@@ -726,6 +726,4 @@ describe('workspace-scope host behavior', () => {
     expect(skillDisposed).toBe(true)
     expect(mcpDisposed).toBe(true)
   })
-
-
 })

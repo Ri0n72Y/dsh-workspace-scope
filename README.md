@@ -9,7 +9,7 @@
 English: [README.en.md](README.en.md)
 
 > [!IMPORTANT]
-> `dsh-workspace-scope v0.5.4` **以 DeepSeek Harness `0.2.0-rc.2` 为已验证基线，并默认允许后续 DSH 版本加载**。兼容 peer 使用插件实际依赖的 `@deepseek-ai/dsh-client-ui-slots >=0.2.0-rc.2`；DSH 0.2.0 的 preflight 会用当前 DSH runtime 版本校验所有 `@deepseek-ai/dsh-*` peer。后续版本属于向上兼容策略，不代表逐版本实测。Web 侧已在 `0.2.0-rc.2` 真实依赖图上通过安装、类型检查、构建与回归测试；最终 frozen install 当前仅受 pnpm 的 24 小时新版本冷却策略阻塞。Desktop `0.2.0-rc.2` 复用同一 Web 应用、Host 与插件管理链路，因此当前代码不需要 Electron 专用适配；正式标记桌面实测前，仍建议在已打包 Desktop 中完成一次安装与 UI/策略 smoke。
+> `dsh-workspace-scope v0.5.4` **以 DeepSeek Harness `0.2.0-rc.2` 为已验证基线，并默认允许后续 DSH 版本加载**。兼容 peer 使用插件实际依赖的 `@deepseek-ai/dsh-client-ui-slots >=0.2.0-rc.2`；DSH 0.2.0 的 preflight 会用当前 DSH runtime 版本校验所有 `@deepseek-ai/dsh-*` peer。后续版本属于向上兼容策略，不代表逐版本实测。Web 侧已在 `0.2.0-rc.2` 真实依赖图上通过 frozen install、类型检查、构建、回归测试与 coverage gate。Desktop `0.2.0-rc.2` 复用同一 Web 应用、Host 与插件管理链路，因此当前代码不需要 Electron 专用适配；正式标记桌面实测前，仍建议在已打包 Desktop 中完成一次安装与 UI/策略 smoke。
 
 ## 安装
 

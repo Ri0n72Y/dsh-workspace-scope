@@ -284,7 +284,6 @@ describe('workspace-scope client', () => {
     await waitFor(() => expect(screen.getByText('保存失败：权限不足')).toBeTruthy())
   })
 
-
   it('submits rapid autosaves in interaction order', async () => {
     let releaseFirst!: (value: { saved: boolean }) => void
     let saveCalls = 0
