@@ -29,10 +29,9 @@ export async function installSkillPolicy(
   const denied = new Set(deniedSkills(config, snapshot.skills.map((skill) => skill.name)));
   if (denied.size === 0) return undefined;
 
-  // Do not read agent.ctx.skills directly. The Agent fiber does not itself
-  // inject the SkillRegistry in DSH 0.1.5-rc.1, so Cordis rejects that property
-  // access. ctx.get() deliberately bypasses the inject requirement while its
-  // traceable service face still binds method calls to this exact Agent scope.
+  // Do not read agent.ctx.skills directly: an Agent scope need not declare
+  // SkillRegistry as an injected property. ctx.get() performs the registry
+  // lookup while its traceable service face still binds calls to this Agent.
   const scopedSkills = getAgentService<ScopedSkillsLike>(agent, "skills");
   const disposers: Array<() => void> = [];
   const dispose = () => {

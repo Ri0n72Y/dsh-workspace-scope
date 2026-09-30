@@ -22,6 +22,8 @@ function ScopeModal(props: ScopeModalProps) {
   const [collapsed, setCollapsed] = useState({ skills: false, mcps: false });
   const panelRef = useRef<HTMLDivElement | null>(null);
   const sessionRef = useRef<string | undefined>(undefined);
+  const saveTailRef = useRef<Promise<void>>(Promise.resolve());
+  const saveRevisionRef = useRef(0);
 
   const mainSession = props.useSessions((state) =>
     Object.values(state.byId).find(
@@ -91,22 +93,25 @@ function ScopeModal(props: ScopeModalProps) {
     if (sessionId === undefined) return;
     setNotice(null);
     const requested = sessionId;
-    callHost("save", {
+    const revision = ++saveRevisionRef.current;
+    const payload = {
       sessionId: requested,
       mode: next.mode,
       skills: [...next.skills],
       mcps: [...next.mcps],
-    })
-      .then((result: { saved?: boolean; reason?: string }) => {
-        if (requested !== sessionRef.current) return;
+    };
+    saveTailRef.current = saveTailRef.current.then(async () => {
+      try {
+        const result = await callHost("save", payload) as { saved?: boolean; reason?: string };
+        if (requested !== sessionRef.current || revision !== saveRevisionRef.current) return;
         setNotice(result.saved === true
           ? { kind: "ok", text: "已保存 ✓（生效于该工作区的新对话）" }
           : { kind: "err", text: `保存失败：${result.reason ?? "未知"}` });
-      })
-      .catch((saveError: unknown) => {
-        if (requested !== sessionRef.current) return;
+      } catch (saveError) {
+        if (requested !== sessionRef.current || revision !== saveRevisionRef.current) return;
         setNotice({ kind: "err", text: `保存失败：${String((saveError && (saveError as Error).message) || saveError)}` });
-      });
+      }
+    });
   };
 
   const skills = data?.skills ?? [];

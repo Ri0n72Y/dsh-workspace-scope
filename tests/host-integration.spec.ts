@@ -1,6 +1,8 @@
 // @vitest-environment node
+import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import { apply } from '../src/index'
+import { registerRuntimePolicy } from '../src/host/runtime-policy'
 
 const SERVER_TOOLS = [
   'mcp__playwright__navigate',
@@ -596,4 +598,106 @@ describe('workspace-scope host behavior', () => {
     expect(env.restrictCalls).toHaveLength(2)
     expect(env.skillRegistrations).toHaveLength(0)
   })
+  it('unwinds Agent-scoped policy effects when plugin unload races async Skill setup', async () => {
+    const root = new Context()
+    let pluginCtx!: Context
+    let releaseGet!: () => void
+    const getGate = new Promise<void>((resolve) => { releaseGet = resolve })
+    let skillShadowed = false
+    let skillRegistered = false
+    let skillDisposed = false
+    let mcpDisposed = false
+
+    const agent = {
+      id: 'a1',
+      session: { header: { cwd: '/ws' } },
+      ctx: {
+        get: (name: string): unknown => {
+          if (name === 'skills') {
+            return {
+              register: (definition: typeof SKILLS[number]): (() => void) => {
+                skillRegistered = true
+                skillShadowed = definition.invocation?.modelInvocable === false
+                return () => {
+                  skillDisposed = true
+                  skillShadowed = false
+                }
+              },
+            }
+          }
+          if (name === 'tools') {
+            return {
+              restrict: (): (() => void) => () => { mcpDisposed = true },
+            }
+          }
+          return undefined
+        },
+      },
+    }
+    const skills = {
+      snapshot: async () => ({
+        skills: [{
+          ...SKILLS[1]!,
+          invocation: { modelInvocable: !skillShadowed, userInvocable: true },
+        }],
+        complete: true,
+      }),
+      get: async () => {
+        await getGate
+        return SKILLS[1]
+      },
+    }
+    const tools = {
+      get: (name: string): unknown => name === 'skill' ? { name } : undefined,
+      schemas: () => [{ name: 'mcp__github__list' }],
+    }
+    const configStore = {
+      read: async () => ({
+        mode: 'blacklist' as const,
+        skills: ['drop-skill'],
+        mcps: ['github'],
+      }),
+      write: async () => ({ saved: true }),
+    }
+    const systemPrompt = { assemble: async () => ({}) }
+    const plugin = root.plugin((ctx: Context) => {
+      pluginCtx = ctx
+      registerRuntimePolicy(ctx, {
+        configStore,
+        skills,
+        tools,
+        systemPrompt,
+        skillAccess: async (operation) => operation(),
+      })
+    })
+    await plugin
+
+    const signal = { throwIfAborted() {} } as unknown as AbortSignal
+    const events = pluginCtx as Context & {
+      waterfall(name: string, ...args: unknown[]): Promise<unknown>
+    }
+    await events.waterfall(
+      'system-prompt/assemble',
+      {},
+      { agent, signal },
+      () => Promise.resolve({}),
+    )
+    const preStep = events.waterfall(
+      'agent/pre-step',
+      { agent, signal },
+      () => Promise.resolve({ kind: 'enter', messages: [] }),
+    )
+    await Promise.resolve()
+
+    const unloading = plugin.dispose()
+    await Promise.resolve()
+    releaseGet()
+    await Promise.allSettled([preStep, unloading])
+
+    expect(skillRegistered).toBe(true)
+    expect(skillDisposed).toBe(true)
+    expect(mcpDisposed).toBe(true)
+  })
+
+
 })
