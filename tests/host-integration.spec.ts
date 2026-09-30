@@ -1,6 +1,8 @@
 // @vitest-environment node
+import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import { apply } from '../src/index'
+import { registerRuntimePolicy } from '../src/host/runtime-policy'
 
 const SERVER_TOOLS = [
   'mcp__playwright__navigate',
@@ -188,6 +190,31 @@ function makeEnv(opts: {
     },
   }
 
+  // Match the Cordis effect contract used by production: setup may be
+  // asynchronous, the returned disposer is awaitable, and disposal racing
+  // setup waits for the setup result before unwinding it.
+  const effect = (cb: () => unknown) => {
+    let inner: (() => unknown) | undefined
+    let disposed = false
+    const setup = Promise.resolve(cb()).then(async (value) => {
+      if (typeof value !== 'function') return
+      if (disposed) await value()
+      else inner = value
+    })
+    const dispose = async (): Promise<void> => {
+      disposed = true
+      await setup
+      const current = inner
+      inner = undefined
+      if (current !== undefined) await current()
+    }
+    const wrapper = () => dispose()
+    return Object.assign(wrapper, {
+      then: (onFulfilled: (value: typeof dispose) => unknown, onRejected?: (reason: unknown) => unknown) =>
+        setup.then(() => dispose).then(onFulfilled, onRejected),
+    })
+  }
+
   const ctx = {
     get: (name: string): unknown => {
       if (name === 'webServer') return webServer
@@ -243,7 +270,7 @@ function makeEnv(opts: {
       if (name === 'sandboxPolicy') return { resolve: () => ({}) }
       return undefined
     },
-    effect: (cb: () => void): (() => void) => { cb(); return () => {} },
+    effect,
     on: (name: string, fn: Listener): (() => boolean) => {
       ;(listeners[name] ??= []).push(fn)
       return () => true
@@ -595,5 +622,108 @@ describe('workspace-scope host behavior', () => {
     await env.systemPrompt.assemble({ agent: first, signal: env.signal })
     expect(env.restrictCalls).toHaveLength(2)
     expect(env.skillRegistrations).toHaveLength(0)
+  })
+  it('unwinds Agent-scoped policy effects when plugin unload races async Skill setup', async () => {
+    const root = new Context()
+    let pluginCtx!: Context
+    let releaseGet!: () => void
+    let markGetStarted!: () => void
+    const getGate = new Promise<void>((resolve) => { releaseGet = resolve })
+    const getStarted = new Promise<void>((resolve) => { markGetStarted = resolve })
+    let skillShadowed = false
+    let skillRegistered = false
+    let skillDisposed = false
+    let mcpDisposed = false
+
+    const agent = {
+      id: 'a1',
+      session: { header: { cwd: '/ws' } },
+      ctx: {
+        get: (name: string): unknown => {
+          if (name === 'skills') {
+            return {
+              register: (definition: typeof SKILLS[number]): (() => void) => {
+                skillRegistered = true
+                skillShadowed = definition.invocation?.modelInvocable === false
+                return () => {
+                  skillDisposed = true
+                  skillShadowed = false
+                }
+              },
+            }
+          }
+          if (name === 'tools') {
+            return {
+              restrict: (): (() => void) => () => { mcpDisposed = true },
+            }
+          }
+          return undefined
+        },
+      },
+    }
+    const skills = {
+      snapshot: async () => ({
+        skills: [{
+          ...SKILLS[1]!,
+          invocation: { modelInvocable: !skillShadowed, userInvocable: true },
+        }],
+        complete: true,
+      }),
+      get: async () => {
+        markGetStarted()
+        await getGate
+        return SKILLS[1]
+      },
+    }
+    const tools = {
+      get: (name: string): unknown => name === 'skill' ? { name } : undefined,
+      schemas: () => [{ name: 'mcp__github__list' }],
+    }
+    const configStore = {
+      read: async () => ({
+        mode: 'blacklist' as const,
+        skills: ['drop-skill'],
+        mcps: ['github'],
+      }),
+      write: async () => ({ saved: true }),
+    }
+    const systemPrompt = { assemble: async () => ({}) }
+    const plugin = root.plugin((ctx: Context) => {
+      pluginCtx = ctx
+      registerRuntimePolicy(ctx, {
+        configStore,
+        skills,
+        tools,
+        systemPrompt,
+        skillAccess: async (operation) => operation(),
+      })
+    })
+    await plugin
+
+    const signal = { throwIfAborted() {} } as unknown as AbortSignal
+    const events = pluginCtx as Context & {
+      waterfall(name: string, ...args: unknown[]): Promise<unknown>
+    }
+    await events.waterfall(
+      'system-prompt/assemble',
+      {},
+      { agent, signal },
+      () => Promise.resolve({}),
+    )
+    const preStep = events.waterfall(
+      'agent/pre-step',
+      { agent, signal },
+      () => Promise.resolve({ kind: 'enter', messages: [] }),
+    )
+    await getStarted
+
+    const unloading = plugin.dispose()
+    await Promise.resolve()
+    releaseGet()
+    await Promise.allSettled([preStep, unloading])
+
+    expect(skillRegistered).toBe(true)
+    expect(skillDisposed).toBe(true)
+    expect(mcpDisposed).toBe(true)
   })
 })

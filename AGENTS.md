@@ -4,7 +4,7 @@
 
 dsh-workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that applies per-workspace policy to Skills already visible to the current Agent and to Host-global MCP servers. Agent/Preset-scoped MCP registrations are outside this plugin's management boundary. The static deployment form is a standard DSH bundle; the `dsh.dynamic` section exists only for hot testing.
 
-Current compatibility baseline: DSH `0.1.6-alpha.2`. Read [docs/architecture.md](docs/architecture.md) before changing Skill or Tool integration; it records the upstream ownership and data-flow contracts used by 0.5.
+Validated compatibility baseline: DSH `0.2.0-rc.2`. The package declares `@deepseek-ai/dsh-client-ui-slots >=0.2.0-rc.2`; DSH preflight evaluates that `@deepseek-ai/dsh-*` peer against the running DSH version, so later runtimes are admitted by default but are not individually field-tested. Read [docs/architecture.md](docs/architecture.md) before changing Skill or Tool integration; it records the upstream ownership and data-flow contracts used by 0.5.
 
 ## Common commands (workdir: dsh-workspace-scope/)
 
@@ -28,9 +28,9 @@ Keep the two public entries as composition roots rather than feature containers.
   - `runtime-policy.ts`: Agent policy lifecycle and DSH event wiring
   - `types.ts`: shared structural types
 - `src/client/index.tsx`: Web slot registration only. Client behavior lives under `src/client/`: `scope-modal.tsx`, `components.tsx`, `model.ts`, `transport.ts`, `modal-state.tsx`, and `styles.module.css`; `css.d.ts` only supplies the CSS Module import type.
-- DSH 0.1.6 client manifest rule: `dsh.client.inject` records package dependency edges; it does not sequence Client activation. This plugin records the two slot-owner packages it contributes to, while runtime `export const inject = ["slots"]` and `ctx.slots.inject(...)` own service/declaration waiting. Do not add `immediately: true` for this ordinary feature UI.
-- DSH 0.1.6 removed `SessionListState.current`. Session-scoped entries read their bound `sessionId` / `useSession`; the root-scoped overlay resolves the main Session from `retainedBy.mainView`, matching the upstream Client selection model. Do not reconstruct a `current` field locally.
-- Client entry props come from DSH `PropsRuntime<...>` and slot declarations; do not hand-write framework seats such as `useSession` / `useSessions` or a local slot-registry face. Keep those alpha.2 contract packages dev-only.
+- DSH 0.2.0 client manifest rule: `dsh.client.inject` records package dependency edges; it does not sequence Client activation. This plugin records the two slot-owner packages it contributes to, while runtime `export const inject = ["slots"]` and `ctx.slots.inject(...)` own service/declaration waiting. Do not add `immediately: true` for this ordinary feature UI.
+- The current Session list contract has no synthetic `SessionListState.current`. Session-scoped entries read their bound `sessionId` / `useSession`; the root-scoped overlay resolves the main Session from `retainedBy.mainView`, matching the upstream Client selection model. Do not reconstruct a `current` field locally.
+- Client entry props come from DSH `PropsRuntime<...>` and slot declarations; do not hand-write framework seats such as `useSession` / `useSessions` or a local slot-registry face. Keep concrete `0.2.0-rc.2` contract packages pinned in devDependencies for reproducible builds.
 - `components.tsx` contains top-level static presentation components. Keep data loading, autosave, and modal-local state in `scope-modal.tsx`; do not recreate nested render-component functions inside it.
 - Do not grow either entry back into a monolith. Split by ownership/responsibility only; do not create one-file-per-function layers.
 
@@ -54,8 +54,8 @@ Keep the two public entries as composition roots rather than feature containers.
 - `conversation.input.right` is session-scoped while `shell.overlay` is root-scoped. Modal visibility is currently the only state shared across them, so `modal-state.tsx` uses React `useSyncExternalStore` over one module-local boolean. Do not introduce a cross-scope DSH store bridge for this single bit; move shared UI state to the native DSH slot store if it grows beyond modal visibility.
 - Config: `.dsh-scope.json` in the workspace root, `default` key `{mode, skills[], mcps[]}`. `default` means all enabled, `whitelist` stores allowed names, and `blacklist` stores denied names. The UI preserves whitelist/blacklist representation. The first disable from `default` converts it to a blacklist containing only the capabilities the user disabled. The effective config becomes process-local Agent state when the first real prompt assembly begins; later file edits do not mutate that Agent's lock.
 - UI inventory is a projection, not configuration ownership. Skill names retained in `.dsh-scope.json` but absent from the current Agent stay hidden and must not be discarded merely because the current Preset cannot see them. Bulk actions operate on the current visible Agent Skill set while preserving hidden entries according to the current mode.
-- `activePolicies` is keyed by `agent.id` and stores the locked config, current effective MCP deny key, and separate Skill/MCP disposers. Agent disposal and plugin unload release both registrations.
-- Writing the config passes `sandboxPolicy.resolve({ session, mode: 'workspace-write' })` when that optional service is available. Writes are serialized through one plugin-local queue so rapid autosaves cannot land out of order; authoritative config reads wait for the same queue before overview or the first policy lock. Saving is a UI management operation, not bound by the session read-only mode.
+- `activePolicies` is keyed by `agent.id` and stores the locked config, current effective MCP deny key, and separate Skill/MCP disposers. Agent-scoped registrations are adopted by plugin-owned `ctx.effect()` wrappers, so plugin unload/HMR cannot leave shadows or restrictions behind; Agent disposal also releases the active wrappers.
+- Writing the config passes `sandboxPolicy.resolve({ session, mode: 'workspace-write' })` when that optional service is available. Client autosaves are submitted through one Promise tail in interaction order, and Host writes are serialized through one plugin-local queue; authoritative config reads wait for the Host queue before overview or the first policy lock. Saving is a UI management operation, not bound by the session read-only mode.
 
 ## UI conventions
 
