@@ -208,7 +208,8 @@ function makeEnv(opts: {
       inner = undefined
       if (current !== undefined) await current()
     }
-    return Object.assign(dispose, {
+    const wrapper = () => dispose()
+    return Object.assign(wrapper, {
       then: (onFulfilled: (value: typeof dispose) => unknown, onRejected?: (reason: unknown) => unknown) =>
         setup.then(() => dispose).then(onFulfilled, onRejected),
     })
