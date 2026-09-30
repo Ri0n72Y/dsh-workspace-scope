@@ -190,6 +190,30 @@ function makeEnv(opts: {
     },
   }
 
+  // Match the Cordis effect contract used by production: setup may be
+  // asynchronous, the returned disposer is awaitable, and disposal racing
+  // setup waits for the setup result before unwinding it.
+  const effect = (cb: () => unknown) => {
+    let inner: (() => unknown) | undefined
+    let disposed = false
+    const setup = Promise.resolve(cb()).then(async (value) => {
+      if (typeof value !== 'function') return
+      if (disposed) await value()
+      else inner = value
+    })
+    const dispose = async (): Promise<void> => {
+      disposed = true
+      await setup
+      const current = inner
+      inner = undefined
+      if (current !== undefined) await current()
+    }
+    return Object.assign(dispose, {
+      then: (onFulfilled: (value: typeof dispose) => unknown, onRejected?: (reason: unknown) => unknown) =>
+        setup.then(() => dispose).then(onFulfilled, onRejected),
+    })
+  }
+
   const ctx = {
     get: (name: string): unknown => {
       if (name === 'webServer') return webServer
@@ -245,7 +269,7 @@ function makeEnv(opts: {
       if (name === 'sandboxPolicy') return { resolve: () => ({}) }
       return undefined
     },
-    effect: (cb: () => void): (() => void) => { cb(); return () => {} },
+    effect,
     on: (name: string, fn: Listener): (() => boolean) => {
       ;(listeners[name] ??= []).push(fn)
       return () => true
