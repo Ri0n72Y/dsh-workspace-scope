@@ -602,7 +602,9 @@ describe('workspace-scope host behavior', () => {
     const root = new Context()
     let pluginCtx!: Context
     let releaseGet!: () => void
+    let markGetStarted!: () => void
     const getGate = new Promise<void>((resolve) => { releaseGet = resolve })
+    const getStarted = new Promise<void>((resolve) => { markGetStarted = resolve })
     let skillShadowed = false
     let skillRegistered = false
     let skillDisposed = false
@@ -643,6 +645,7 @@ describe('workspace-scope host behavior', () => {
         complete: true,
       }),
       get: async () => {
+        markGetStarted()
         await getGate
         return SKILLS[1]
       },
@@ -687,7 +690,7 @@ describe('workspace-scope host behavior', () => {
       { agent, signal },
       () => Promise.resolve({ kind: 'enter', messages: [] }),
     )
-    await Promise.resolve()
+    await getStarted
 
     const unloading = plugin.dispose()
     await Promise.resolve()
