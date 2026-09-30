@@ -70,7 +70,7 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.4",
     "react": "^18.2.0",
-    "@deepseek-ai/dsh": ">=0.2.0-rc.2"
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.2.0-rc.2"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.4",
@@ -95,7 +95,7 @@
     "@deepseek-ai/dsh-agent-preset-registry": "0.2.0-rc.2"
   },
   "peerDependenciesMeta": {
-    "@deepseek-ai/dsh": {
+    "@deepseek-ai/dsh-client-ui-slots": {
       "optional": true
     }
   }

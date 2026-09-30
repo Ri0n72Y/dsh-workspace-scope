@@ -4,7 +4,7 @@
 
 dsh-workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that applies per-workspace policy to Skills already visible to the current Agent and to Host-global MCP servers. Agent/Preset-scoped MCP registrations are outside this plugin's management boundary. The static deployment form is a standard DSH bundle; the `dsh.dynamic` section exists only for hot testing.
 
-Validated compatibility baseline: DSH `0.2.0-rc.2`. The package declares `@deepseek-ai/dsh >=0.2.0-rc.2` so later DSH runtimes are admitted by default, but they are not individually field-tested. Read [docs/architecture.md](docs/architecture.md) before changing Skill or Tool integration; it records the upstream ownership and data-flow contracts used by 0.5.
+Validated compatibility baseline: DSH `0.2.0-rc.2`. The package declares `@deepseek-ai/dsh-client-ui-slots >=0.2.0-rc.2`; DSH preflight evaluates that `@deepseek-ai/dsh-*` peer against the running DSH version, so later runtimes are admitted by default but are not individually field-tested. Read [docs/architecture.md](docs/architecture.md) before changing Skill or Tool integration; it records the upstream ownership and data-flow contracts used by 0.5.
 
 ## Common commands (workdir: dsh-workspace-scope/)
 
