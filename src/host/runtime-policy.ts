@@ -20,6 +20,7 @@ type PolicyDispose = () => void | Promise<void>;
 interface ActivePolicy {
   config: ScopeConfig;
   mcpKey?: string;
+  mcpFailure?: { error: unknown };
   skillDispose?: PolicyDispose;
   mcpDispose?: PolicyDispose;
 }
@@ -83,12 +84,19 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
         activePolicies.set(agent.id, active);
       }
 
+      if (active.mcpFailure !== undefined) throw active.mcpFailure.error;
+
       const denied = deniedMcpTools(active.config, globalMcpToolsMap(tools));
       const key = JSON.stringify(denied);
       if (active.mcpKey === key) return next();
 
       const previous = active.mcpDispose;
-      await dispose(previous);
+      try {
+        await dispose(previous);
+      } catch (error) {
+        active.mcpFailure = { error };
+        throw error;
+      }
       signal.throwIfAborted();
 
       const replacement = denied.length === 0

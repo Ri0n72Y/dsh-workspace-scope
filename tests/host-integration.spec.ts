@@ -204,12 +204,15 @@ function makeEnv(opts: {
   const effect = (cb: () => unknown) => {
     let inner: (() => unknown) | undefined
     let disposed = false
+    let cleanupStarted = false
     const setup = Promise.resolve(cb()).then(async (value) => {
       if (typeof value !== 'function') return
       if (disposed) await value()
       else inner = value
     })
     const dispose = async (): Promise<void> => {
+      if (cleanupStarted) return
+      cleanupStarted = true
       disposed = true
       await setup
       const current = inner
@@ -619,9 +622,9 @@ describe('workspace-scope host behavior', () => {
       .rejects.toThrow('mcp dispose failed')
     expect(env.restrictCalls).toHaveLength(1)
 
-    // Cordis effect disposers are single-shot. A failed teardown remains
-    // observable on later calls; do not mark the replacement key as applied
-    // or install another restriction over a stale one.
+    // Cordis public effect disposers are single-shot. Persist the cleanup
+    // failure in Agent policy state so later assemblies remain fail-closed
+    // instead of treating a second no-op dispose as recovery.
     await expect(env.systemPrompt.assemble({ agent, signal: env.signal }))
       .rejects.toThrow('mcp dispose failed')
     expect(env.restrictCalls).toHaveLength(1)
