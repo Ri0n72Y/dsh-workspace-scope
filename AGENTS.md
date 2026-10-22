@@ -4,7 +4,7 @@
 
 dsh-workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that applies per-workspace policy to Skills already visible to the current Agent and to Host-global MCP servers. Agent/Preset-scoped MCP registrations are outside this plugin's management boundary. The static deployment form is a standard DSH bundle; the `dsh.dynamic` section exists only for hot testing.
 
-Validated compatibility baseline: DSH `0.2.0-rc.2`. The package declares `@deepseek-ai/dsh-client-ui-slots >=0.2.0-rc.2`; DSH preflight evaluates that `@deepseek-ai/dsh-*` peer against the running DSH version, so later runtimes are admitted by default but are not individually field-tested. Read [docs/architecture.md](docs/architecture.md) before changing Skill or Tool integration; it records the upstream ownership and data-flow contracts used by 0.5.
+Validated compatibility baseline: DSH `0.2.1-rc.2`. The package declares `engines.dsh >=0.2.1-rc.2`; DSH 0.2.1 compatibility preflight evaluates that host range before any DSH peer fallback, so later runtimes are admitted by default but are not individually field-tested. Read [docs/architecture.md](docs/architecture.md) before changing Skill or Tool integration; it records the upstream ownership and data-flow contracts used by 0.5.
 
 ## Common commands (workdir: dsh-workspace-scope/)
 
@@ -30,7 +30,7 @@ Keep the two public entries as composition roots rather than feature containers.
 - `src/client/index.tsx`: Web slot registration only. Client behavior lives under `src/client/`: `scope-modal.tsx`, `components.tsx`, `model.ts`, `transport.ts`, `modal-state.tsx`, and `styles.module.css`; `css.d.ts` only supplies the CSS Module import type.
 - DSH 0.2.0 client manifest rule: `dsh.client.inject` records package dependency edges; it does not sequence Client activation. This plugin records the two slot-owner packages it contributes to, while runtime `export const inject = ["slots"]` and `ctx.slots.inject(...)` own service/declaration waiting. Do not add `immediately: true` for this ordinary feature UI.
 - The current Session list contract has no synthetic `SessionListState.current`. Session-scoped entries read their bound `sessionId` / `useSession`; the root-scoped overlay resolves the main Session from `retainedBy.mainView`, matching the upstream Client selection model. Do not reconstruct a `current` field locally.
-- Client entry props come from DSH `PropsRuntime<...>` and slot declarations; do not hand-write framework seats such as `useSession` / `useSessions` or a local slot-registry face. Keep concrete `0.2.0-rc.2` contract packages pinned in devDependencies for reproducible builds.
+- Client entry props come from DSH `PropsRuntime<...>` and slot declarations; do not hand-write framework seats such as `useSession` / `useSessions` or a local slot-registry face. Keep concrete `0.2.1-rc.2` contract packages pinned in devDependencies for reproducible builds.
 - `components.tsx` contains top-level static presentation components. Keep data loading, autosave, and modal-local state in `scope-modal.tsx`; do not recreate nested render-component functions inside it.
 - Do not grow either entry back into a monolith. Split by ownership/responsibility only; do not create one-file-per-function layers.
 
