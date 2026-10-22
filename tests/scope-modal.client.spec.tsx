@@ -284,6 +284,42 @@ describe('workspace-scope client', () => {
     await waitFor(() => expect(screen.getByText('保存失败：权限不足')).toBeTruthy())
   })
 
+  it('submits rapid autosaves in interaction order', async () => {
+    let releaseFirst!: (value: { saved: boolean }) => void
+    let saveCalls = 0
+    const m = await mount((method: string) => {
+      if (method === 'overview') return Promise.resolve(makeOverview())
+      if (method === 'save') {
+        saveCalls += 1
+        if (saveCalls === 1) {
+          return new Promise<{ saved: boolean }>((resolve) => { releaseFirst = resolve })
+        }
+        return Promise.resolve({ saved: true })
+      }
+      return Promise.resolve({})
+    })
+    m.renderModal(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
+    openDialog()
+    await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(4))
+
+    fireEvent.click(screen.getByRole('button', { name: '全部禁用' }))
+    await waitFor(() => expect(saveCalls).toBe(1))
+    fireEvent.click(screen.getByRole('button', { name: '全部启用' }))
+    await Promise.resolve()
+    expect(saveCalls).toBe(1)
+
+    releaseFirst({ saved: true })
+    await waitFor(() => expect(saveCalls).toBe(2))
+    const saves = m.hostCall.mock.calls.filter(([method]) => method === 'save')
+    expect(saves[0]![1]).toMatchObject({ mode: 'whitelist', skills: [], mcps: [] })
+    expect(saves[1]![1]).toMatchObject({
+      mode: 'whitelist',
+      skills: ['skill-a', 'skill-b', 'skill-c'],
+      mcps: ['playwright'],
+    })
+  })
+
   it('closes via Escape and via the backdrop, focusing the dialog on open', async () => {
     const m = await mount()
     m.renderModal(sessions('s1', true))
