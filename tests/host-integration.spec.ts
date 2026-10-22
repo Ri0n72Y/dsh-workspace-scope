@@ -63,6 +63,7 @@ function makeEnv(opts: {
   missingSkillTools?: string[]
   lateSkillOnSecondSnapshot?: boolean
   revisionSensitiveSkillSnapshots?: boolean
+  failFirstMcpDispose?: boolean
   writeGate?: Promise<void>
 } = {}) {
   const blockedSkillRegistrations = new Set(opts.blockedSkillRegistrations ?? [])
@@ -84,6 +85,7 @@ function makeEnv(opts: {
   }> = []
   const skillSnapshotCalls = new Map<string, number>()
   let skillRevision = 0
+  let mcpDisposeFailed = false
   const listeners: Record<string, Listener[]> = {}
   const agentMap = new Map<string, ReturnType<typeof createAgent>>()
   let routeHandler: ((req: unknown, res: unknown) => Promise<void>) | null = null
@@ -95,7 +97,13 @@ function makeEnv(opts: {
       restrict: (filter: { deny: string[] }): (() => void) => {
         const call = { agentId: id, deny: [...filter.deny], disposed: false }
         restrictCalls.push(call)
-        return () => { call.disposed = true }
+        return () => {
+          if (opts.failFirstMcpDispose === true && !mcpDisposeFailed) {
+            mcpDisposeFailed = true
+            throw new Error('mcp dispose failed')
+          }
+          call.disposed = true
+        }
       },
     }
     const scopedSkills = {
@@ -596,6 +604,32 @@ describe('workspace-scope host behavior', () => {
     await expect(dispatchPreStep(env.listeners, payloadOf(agent)))
       .rejects.toThrow('failed to hide skill "late-skill"')
     expect(env.skillRegistrations[0]!.disposed).toBe(true)
+  })
+
+  it('retries MCP replacement after the previous restriction fails to dispose', async () => {
+    const env = makeEnv({ failFirstMcpDispose: true })
+    apply(env.ctx as never)
+    const agent = env.agent('a1')
+
+    await env.systemPrompt.assemble({ agent, signal: env.signal })
+    expect(env.restrictCalls).toHaveLength(1)
+
+    env.state.serverTools.push('mcp__github__create')
+    await expect(env.systemPrompt.assemble({ agent, signal: env.signal }))
+      .rejects.toThrow('mcp dispose failed')
+    expect(env.restrictCalls).toHaveLength(1)
+
+    const retried = await env.systemPrompt.assemble({ agent, signal: env.signal })
+    expect(env.restrictCalls).toHaveLength(2)
+    expect(env.restrictCalls[0]!.disposed).toBe(true)
+    expect(env.restrictCalls[1]!.deny).toEqual([
+      'mcp__github__create',
+      'mcp__github__list',
+    ])
+    expect(retried.tools.map((tool) => tool.name)).toEqual([
+      'mcp__playwright__navigate',
+      'mcp__playwright__click',
+    ])
   })
 
   it('reassembles only when the effective denied MCP set changes', async () => {

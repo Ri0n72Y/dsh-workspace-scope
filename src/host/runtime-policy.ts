@@ -41,12 +41,10 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
     options?: boolean | { prepend?: boolean },
   ) => unknown;
   const dispose = async (fn: PolicyDispose | undefined): Promise<void> => {
-    if (fn === undefined) return;
-    try {
-      await fn();
-    } catch {
-      // Agent scope teardown may already have removed the registration.
-    }
+    if (fn !== undefined) await fn();
+  };
+  const disposeOnTeardown = (fn: PolicyDispose | undefined): void => {
+    void dispose(fn).catch((error: unknown) => { ctx.logger.error(error); });
   };
 
   // Agent-scoped Skill/Tool registrations below are adopted by this plugin
@@ -58,8 +56,8 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
   onEvent("agent/disposed", ({ agent }: { agent: AgentLike }) => {
     const policy = activePolicies.get(agent.id);
     activePolicies.delete(agent.id);
-    void dispose(policy?.skillDispose);
-    void dispose(policy?.mcpDispose);
+    disposeOnTeardown(policy?.skillDispose);
+    disposeOnTeardown(policy?.mcpDispose);
   });
 
   // The AgentLoop assembles before agent/pre-step. Lock config at the first
@@ -89,19 +87,20 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
       const key = JSON.stringify(denied);
       if (active.mcpKey === key) return next();
 
+      const previous = active.mcpDispose;
+      await dispose(previous);
+      signal.throwIfAborted();
+
       const replacement = denied.length === 0
         ? undefined
         : ctx.effect(
             () => getAgentService<ScopedToolsLike>(agent, "tools").restrict({ deny: denied }),
             "workspace-scope:mcp-policy",
           );
-      const previous = active.mcpDispose;
       active.mcpDispose = replacement;
       active.mcpKey = key;
-      await dispose(previous);
 
       if (previous === undefined && replacement === undefined) return next();
-      signal.throwIfAborted();
       return systemPrompt.assemble(context);
     },
     { prepend: true },
