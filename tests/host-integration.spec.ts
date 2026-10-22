@@ -606,7 +606,7 @@ describe('workspace-scope host behavior', () => {
     expect(env.skillRegistrations[0]!.disposed).toBe(true)
   })
 
-  it('retries MCP replacement after the previous restriction fails to dispose', async () => {
+  it('fails closed when the previous MCP restriction cannot be disposed', async () => {
     const env = makeEnv({ failFirstMcpDispose: true })
     apply(env.ctx as never)
     const agent = env.agent('a1')
@@ -619,17 +619,13 @@ describe('workspace-scope host behavior', () => {
       .rejects.toThrow('mcp dispose failed')
     expect(env.restrictCalls).toHaveLength(1)
 
-    const retried = await env.systemPrompt.assemble({ agent, signal: env.signal })
-    expect(env.restrictCalls).toHaveLength(2)
-    expect(env.restrictCalls[0]!.disposed).toBe(true)
-    expect(env.restrictCalls[1]!.deny).toEqual([
-      'mcp__github__create',
-      'mcp__github__list',
-    ])
-    expect(retried.tools.map((tool) => tool.name)).toEqual([
-      'mcp__playwright__navigate',
-      'mcp__playwright__click',
-    ])
+    // Cordis effect disposers are single-shot. A failed teardown remains
+    // observable on later calls; do not mark the replacement key as applied
+    // or install another restriction over a stale one.
+    await expect(env.systemPrompt.assemble({ agent, signal: env.signal }))
+      .rejects.toThrow('mcp dispose failed')
+    expect(env.restrictCalls).toHaveLength(1)
+    expect(env.restrictCalls[0]!.disposed).toBe(false)
   })
 
   it('reassembles only when the effective denied MCP set changes', async () => {
