@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file. The format is b
 ## [Unreleased]
 
 ### Changed
-- Use DeepSeek Harness `0.2.1-rc.2` as the validated baseline while allowing later DSH runtimes by default through `engines.dsh >=0.2.1-rc.2`; concrete Client contract/type dependencies remain pinned to `0.2.1-rc.2` for reproducible builds, and Cordis remains `4.0.4`.
+- Use DeepSeek Harness `0.2.1-rc.2` as the validated baseline while allowing later DSH runtimes by default through `engines.dsh >=0.2.1-rc.2`; concrete Client contract/type dependencies remain pinned to `0.2.1-rc.2` for reproducible builds, and the development baseline follows Cordis `4.0.5`.
 - Document Desktop `0.2.1-rc.2` compatibility boundaries: Desktop loads external plugins from its reserved profile and reuses the shared Web application/Host path, so no Electron-specific plugin surface is required; packaged-Desktop smoke remains the final field verification step.
 
 ## [0.5.3] - 2026-09-23
