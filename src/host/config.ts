@@ -1,4 +1,5 @@
 import type { Context } from "@deepseek-ai/cordis";
+import type { ScopeResolver } from "./scope-location.js";
 import type {
   ConfigStore,
   FsServiceLike,
@@ -6,7 +7,6 @@ import type {
   ScopeConfig,
 } from "./types.js";
 
-const CONFIG_FILE = ".dsh-scope.json";
 const DEFAULT_CONFIG: ScopeConfig = { mode: "default", skills: [], mcps: [] };
 
 function defaultConfig(): ScopeConfig {
@@ -43,33 +43,49 @@ export function parseScopeConfig(text: string | undefined): ScopeConfig {
   };
 }
 
-export function createConfigStore(ctx: Context, fs: FsServiceLike): ConfigStore {
-  // One queue is enough for this small workspace-local document. Reads wait for
+export function createConfigStore(
+  ctx: Context,
+  fs: FsServiceLike,
+  resolver: ScopeResolver,
+): ConfigStore {
+  // One queue is enough for these small workspace-local documents. Reads wait for
   // already-started writes so overview / first-turn policy cannot observe stale data.
   let writeQueue: Promise<void> = Promise.resolve();
 
-  async function read(cwd: string | undefined): Promise<ScopeConfig> {
+  async function read(
+    session: Parameters<ConfigStore["read"]>[0],
+    signal?: AbortSignal,
+  ): Promise<ScopeConfig> {
     await writeQueue;
-    if (cwd === undefined || cwd === "") return defaultConfig();
     try {
-      const target = await fs.resolve(`${cwd}/${CONFIG_FILE}`);
-      return parseScopeConfig(await fs.readText(target));
+      const location = await resolver.locate(session, signal);
+      if (!location.exists) return defaultConfig();
+      return parseScopeConfig(await fs.readText(location.target, signal));
     } catch {
       return defaultConfig();
     }
   }
 
   function write(
-    cwd: string | undefined,
+    session: Parameters<ConfigStore["write"]>[0],
     config: ScopeConfig,
-    session: Parameters<ConfigStore["write"]>[2],
   ): ReturnType<ConfigStore["write"]> {
     const pending = writeQueue.then(async () => {
+      const cwd = session?.header.cwd;
       if (cwd === undefined || cwd === "") {
         return { saved: false, reason: "无法确定工作目录，未保存" };
       }
       try {
-        const target = await fs.resolve(`${cwd}/${CONFIG_FILE}`);
+        // Save edits the file this Session reads: the nearest scope file up to
+        // the header cwd, or a new one at the header cwd.
+        const location = await resolver.locate(session);
+        if (location.path === undefined || !location.writable) {
+          return {
+            saved: false,
+            reason: `dsh-workspace-scope: ${location.path ?? "the scope file"} is not a regular file inside the workspace, not saved`,
+          };
+        }
+        const target = location.target;
         let document: Record<string, unknown> = {};
         try {
           const parsed = JSON.parse(await fs.readText(target)) as unknown;

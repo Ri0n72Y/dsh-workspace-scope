@@ -4,17 +4,33 @@ import { createWorkspaceApi, registerHttpApi } from "./host/api.js";
 import { createConfigStore, parseScopeConfig } from "./host/config.js";
 import { deniedServers, deniedSkills } from "./host/policy.js";
 import { registerRuntimePolicy } from "./host/runtime-policy.js";
+import {
+  createScopeResolver,
+  effectiveCwdOf,
+  isPathWithin,
+  scopeSearchDirs,
+} from "./host/scope-location.js";
 import type {
   AgentsServiceLike,
   FsServiceLike,
+  SessionLike,
   SkillsServiceLike,
   SkillAccess,
   SystemPromptLike,
   ToolsServiceLike,
   WebServerLike,
+  WorkingDirectoryLike,
 } from "./host/types.js";
 
-export { parseScopeConfig, deniedServers, deniedSkills };
+export {
+  parseScopeConfig,
+  deniedServers,
+  deniedSkills,
+  createScopeResolver,
+  effectiveCwdOf,
+  isPathWithin,
+  scopeSearchDirs,
+};
 
 declare const harness: any;
 
@@ -29,7 +45,14 @@ export function apply(ctx: Context): void {
   const agents = ctx.get("agents") as AgentsServiceLike;
   const systemPrompt = ctx.get("systemPrompt") as SystemPromptLike;
 
-  const configStore = createConfigStore(ctx, fs);
+  // Looked up softly on every call instead of injected: Cordis treats every
+  // inject entry as required, and the plugin must keep starting on DSH builds
+  // without this service (it then reads the header cwd, as before).
+  const getWorkingDirectory = () =>
+    ctx.get("workingDirectory") as WorkingDirectoryLike | undefined;
+  const effectiveCwd = (session: SessionLike | undefined) =>
+    effectiveCwdOf(getWorkingDirectory, session);
+  const configStore = createConfigStore(ctx, fs, createScopeResolver(fs, getWorkingDirectory));
 
   // SkillRegistry uses one service-wide revision. Keep this plugin's own
   // dispose/snapshot/register/verify transactions from invalidating each other
@@ -48,9 +71,16 @@ export function apply(ctx: Context): void {
     }
   };
 
-  registerRuntimePolicy(ctx, { configStore, skills, tools, systemPrompt, skillAccess });
+  registerRuntimePolicy(ctx, {
+    configStore,
+    skills,
+    tools,
+    systemPrompt,
+    skillAccess,
+    effectiveCwd,
+  });
 
-  const api = createWorkspaceApi({ agents, skills, tools, configStore, skillAccess });
+  const api = createWorkspaceApi({ agents, skills, tools, configStore, skillAccess, effectiveCwd });
   registerHttpApi(ctx, webServer, api);
 
   if (typeof harness !== "undefined") {

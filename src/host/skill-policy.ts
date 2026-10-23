@@ -13,13 +13,18 @@ export async function installSkillPolicy(
   tools: ToolsServiceLike,
   agent: AgentLike,
   config: ScopeConfig,
+  viewCwd: string | undefined,
   signal: AbortSignal,
 ): Promise<(() => void) | undefined> {
   if (config.mode === "default" || tools.get("skill", agent) === undefined) {
     return undefined;
   }
 
-  const view = { scope: agent, cwd: agent.session.header.cwd, signal };
+  // tool-skill builds the model catalog after this pre-step handler with
+  // `cwd: workingDirectory.ensure(agent)`, and the SkillRegistry caches catalogs
+  // per cwd string. Shadows and their verification must use that same effective
+  // cwd: a Skill that exists only under it would otherwise never be hidden.
+  const view = { scope: agent, cwd: viewCwd, signal };
   const snapshot = await skills.snapshot(view);
   signal.throwIfAborted();
   if (!snapshot.complete) {

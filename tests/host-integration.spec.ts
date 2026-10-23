@@ -48,6 +48,12 @@ const WHITELIST_TEXT = JSON.stringify({
 const BLACKLIST_TEXT = JSON.stringify({
   default: { mode: 'blacklist', skills: ['keep-skill'], mcps: ['playwright'] },
 })
+const AUDIO_TEXT = JSON.stringify({
+  default: { mode: 'whitelist', skills: ['drop-skill'], mcps: ['github'] },
+})
+const ROOT_FILE = '/ws/.dsh-scope.json'
+const AUDIO_DIR = '/ws/scenarios/audio'
+const AUDIO_FILE = `${AUDIO_DIR}/.dsh-scope.json`
 
 type Listener = (...args: never[]) => unknown
 
@@ -62,15 +68,23 @@ function makeEnv(opts: {
   lateSkillOnSecondSnapshot?: boolean
   revisionSensitiveSkillSnapshots?: boolean
   writeGate?: Promise<void>
+  /** Scope files besides the workspace root file, by absolute path. */
+  files?: Record<string, string>
+  /** Effective working directory per Agent id; enables the workingDirectory service. */
+  workingDirectory?: Record<string, string>
+  /** Symbolic links by absolute path, mapped to their target path. */
+  symlinks?: Record<string, string>
 } = {}) {
   const blockedSkillRegistrations = new Set(opts.blockedSkillRegistrations ?? [])
   const incompleteSkillSnapshots = new Set(opts.incompleteSkillSnapshots ?? [])
   const missingAgents = new Set(opts.missingAgents ?? [])
   const missingSkillTools = new Set(opts.missingSkillTools ?? [])
   const state = {
-    configText: opts.configText ?? WHITELIST_TEXT,
+    // An explicit `configText: undefined` models a workspace without a root scope file.
+    configText: 'configText' in opts ? opts.configText : WHITELIST_TEXT,
     serverTools: [...SERVER_TOOLS],
     written: [] as Array<{ target: string; content: string }>,
+    files: new Map(Object.entries(opts.files ?? {})),
     assemblyCalls: 0,
     assemblyTerminalCalls: 0,
   }
@@ -81,6 +95,10 @@ function makeEnv(opts: {
     disposed: boolean
   }> = []
   const skillSnapshotCalls = new Map<string, number>()
+  const skillSnapshotCwds: Array<{ agentId: string; cwd: unknown }> = []
+  const effectiveCwds = new WeakMap<object, string>()
+  const fileText = (path: string): string | undefined =>
+    path === ROOT_FILE ? state.configText : state.files.get(path)
   let skillRevision = 0
   const listeners: Record<string, Listener[]> = {}
   const agentMap = new Map<string, ReturnType<typeof createAgent>>()
@@ -109,9 +127,12 @@ function makeEnv(opts: {
         }
       },
     }
+    const session = { header: { cwd: '/ws' } }
+    const effective = opts.workingDirectory?.[id]
+    if (effective !== undefined) effectiveCwds.set(session, effective)
     return {
       id,
-      session: { header: { cwd: '/ws' } },
+      session,
       ctx: {
         // Match the Cordis Context seam used by production. Keeping the named
         // faces also makes this fixture useful for assertions on scoped effects.
@@ -197,8 +218,9 @@ function makeEnv(opts: {
       if (name === 'systemPrompt') return systemPrompt
       if (name === 'skills') {
         return {
-          snapshot: async (options: { scope?: { id?: string } } = {}) => {
+          snapshot: async (options: { scope?: { id?: string }; cwd?: unknown } = {}) => {
             const id = options.scope?.id
+            if (id !== undefined) skillSnapshotCwds.push({ agentId: id, cwd: options.cwd })
             const calls = id === undefined ? 0 : (skillSnapshotCalls.get(id) ?? 0)
             if (id !== undefined) skillSnapshotCalls.set(id, calls + 1)
             const revision = skillRevision
@@ -231,13 +253,31 @@ function makeEnv(opts: {
       }
       if (name === 'fs') {
         return {
-          resolve: async (path: string): Promise<string> => path,
-          readText: async (): Promise<string> => state.configText,
+          resolve: async (path: string): Promise<string> => opts.symlinks?.[path] ?? path,
+          processPath: (target: unknown): string => String(target),
+          contains: (parent: unknown, child: unknown): boolean =>
+            child === parent || String(child).startsWith(`${String(parent)}/`),
+          lstat: async (path: string) => {
+            if (opts.symlinks?.[path] !== undefined) return { type: 'symlink' }
+            return fileText(path) === undefined ? undefined : { type: 'file' }
+          },
+          readText: async (target: unknown): Promise<string> => {
+            const text = fileText(String(target))
+            if (text === undefined) throw new Error('FS_NOT_FOUND')
+            return text
+          },
           writeText: async (target: unknown, content: string): Promise<void> => {
             state.written.push({ target: String(target), content })
             await opts.writeGate
-            state.configText = content
+            if (String(target) === ROOT_FILE) state.configText = content
+            else state.files.set(String(target), content)
           },
+        }
+      }
+      if (name === 'workingDirectory' && opts.workingDirectory !== undefined) {
+        return {
+          get: (session: { header: { cwd: string } }): string =>
+            effectiveCwds.get(session) ?? session.header.cwd,
         }
       }
       if (name === 'sandboxPolicy') return { resolve: () => ({}) }
@@ -260,6 +300,7 @@ function makeEnv(opts: {
     systemPrompt,
     restrictCalls,
     skillRegistrations,
+    skillSnapshotCwds,
     routeHandler: () => routeHandler,
   }
 }
@@ -595,5 +636,115 @@ describe('workspace-scope host behavior', () => {
     await env.systemPrompt.assemble({ agent: first, signal: env.signal })
     expect(env.restrictCalls).toHaveLength(2)
     expect(env.skillRegistrations).toHaveLength(0)
+  })
+})
+
+describe('scope of a subagent started in another folder', () => {
+  // DSH copies the parent's header cwd into a subagent Session and commits the
+  // requested cwd to the workingDirectory projection before the first request.
+  const subagentEnv = (extra: Parameters<typeof makeEnv>[0] = {}) => makeEnv({
+    files: { [AUDIO_FILE]: AUDIO_TEXT },
+    workingDirectory: { sub: AUDIO_DIR },
+    ...extra,
+  })
+
+  it('locks the scope file of the effective working directory', async () => {
+    const env = subagentEnv()
+    apply(env.ctx as never)
+
+    await env.systemPrompt.assemble({ agent: env.agent('sub'), signal: env.signal })
+    expect(env.restrictCalls[0]).toEqual({
+      agentId: 'sub',
+      deny: ['mcp__playwright__click', 'mcp__playwright__navigate'],
+      disposed: false,
+    })
+
+    // A Session whose effective cwd is the header cwd keeps the root file.
+    await env.systemPrompt.assemble({ agent: env.agent('root'), signal: env.signal })
+    expect(env.restrictCalls[1]!.deny).toEqual(['mcp__github__list'])
+  })
+
+  it('builds and verifies Skill shadows on the effective working directory', async () => {
+    const env = subagentEnv()
+    apply(env.ctx as never)
+    const sub = env.agent('sub')
+
+    await env.systemPrompt.assemble({ agent: sub, signal: env.signal })
+    await dispatchPreStep(env.listeners, payloadOf(sub))
+    expect(env.skillRegistrations.map((entry) => entry.skill.name)).toEqual(['keep-skill'])
+    const cwds = env.skillSnapshotCwds.filter((entry) => entry.agentId === 'sub')
+    expect(cwds.length).toBeGreaterThan(0)
+    expect(cwds.every((entry) => entry.cwd === AUDIO_DIR)).toBe(true)
+  })
+
+  it('serves the overview from the scope file and Skill view the subagent uses', async () => {
+    const env = subagentEnv()
+    apply(env.ctx as never)
+    const res = makeRes()
+    await env.routeHandler()!(
+      makeReqGet('/api/dsh-workspace-scope/overview?sessionId=sub') as never,
+      res as never,
+    )
+    expect(res.statusCode).toBe(200)
+    expect(JSON.parse(res.body).config).toEqual({
+      mode: 'whitelist',
+      skills: ['drop-skill'],
+      mcps: ['github'],
+    })
+    expect(env.skillSnapshotCwds).toEqual([{ agentId: 'sub', cwd: AUDIO_DIR }])
+  })
+
+  it('saves to the scope file the subagent reads and leaves the root file alone', async () => {
+    const env = subagentEnv()
+    apply(env.ctx as never)
+    const res = makeRes()
+    await env.routeHandler()!(
+      makeReqPost(
+        '/api/dsh-workspace-scope/save',
+        JSON.stringify({ sessionId: 'sub', mode: 'blacklist', skills: [], mcps: ['github'] }),
+      ) as never,
+      res as never,
+    )
+    expect(JSON.parse(res.body).saved).toBe(true)
+    expect(env.state.written.map((entry) => entry.target)).toEqual([AUDIO_FILE])
+    expect(env.state.configText).toBe(WHITELIST_TEXT)
+  })
+
+  it('refuses to save through a symlinked scope file', async () => {
+    const shared = '/ws/scenarios/shared'
+    const env = subagentEnv({
+      workingDirectory: { sub: shared },
+      symlinks: { [`${shared}/.dsh-scope.json`]: AUDIO_FILE },
+    })
+    apply(env.ctx as never)
+    const res = makeRes()
+    await env.routeHandler()!(
+      makeReqPost('/api/dsh-workspace-scope/save', JSON.stringify({ sessionId: 'sub', mode: 'default' })) as never,
+      res as never,
+    )
+    const body = JSON.parse(res.body) as { saved: boolean; reason: string }
+    expect(body.saved).toBe(false)
+    expect(body.reason).toMatch(/not a regular file inside the workspace/)
+    expect(env.state.written).toEqual([])
+  })
+
+  it('creates a missing scope file at the header cwd, never in a subfolder', async () => {
+    const env = makeEnv({ configText: undefined, workingDirectory: { sub: AUDIO_DIR } })
+    apply(env.ctx as never)
+    const res = makeRes()
+    await env.routeHandler()!(
+      makeReqPost('/api/dsh-workspace-scope/save', JSON.stringify({ sessionId: 'sub', mode: 'whitelist' })) as never,
+      res as never,
+    )
+    expect(JSON.parse(res.body).saved).toBe(true)
+    expect(env.state.written.map((entry) => entry.target)).toEqual([ROOT_FILE])
+  })
+
+  it('reads the header cwd when DSH has no workingDirectory service', async () => {
+    const env = subagentEnv({ workingDirectory: undefined })
+    apply(env.ctx as never)
+
+    await env.systemPrompt.assemble({ agent: env.agent('sub'), signal: env.signal })
+    expect(env.restrictCalls[0]!.deny).toEqual(['mcp__github__list'])
   })
 })
