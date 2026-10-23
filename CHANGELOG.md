@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Fixed
+- Resolved `.dsh-scope.json` from the Session's effective working directory (the DSH `workingDirectory` projection) instead of `session.header.cwd`. A subagent started with `cwd` keeps its parent's header `cwd`, so it previously locked, displayed and saved the workspace root scope instead of its own folder's. The nearest file from the effective directory up to the header `cwd` (inclusive) now wins; nothing above the header `cwd` is read. Without the `workingDirectory` service, the header `cwd` is used as before.
+- Built and verified the Skill policy shadows on the same effective `cwd` that tool-skill uses for the model catalog, so a Skill that exists only under that directory is hidden as configured.
+- A scope file that is a symbolic link is read only when it points inside the workspace and is never written through.
+
 ## [0.5.3] - 2026-09-23
 
 > **Compatibility:** v0.5.3 remains targeted and tested only with DeepSeek Harness `0.1.6-alpha.2`; it does not expand the supported DSH version range.

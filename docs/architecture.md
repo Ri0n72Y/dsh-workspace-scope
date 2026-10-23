@@ -112,10 +112,12 @@ The authoritative read for one Agent is:
 ```ts
 skills.snapshot({
   scope: agent,
-  cwd: agent.session.header.cwd,
+  cwd: workingDirectory.get(agent.session), // effective cwd; header cwd without the service
   signal,
 })
 ```
+
+DSH tool-skill builds the model catalog with the same effective `cwd` (`workingDirectory.ensure(agent)`), and the registry caches catalogs per `cwd`, so the plugin's shadows and their verification use that value rather than `session.header.cwd`. They differ for a subagent started with `cwd`: its header keeps the parent's directory, while the `workingDirectory` projection holds the requested one.
 
 The registry merges the global layer and the Agent's scope chain. A nearer scope wins a duplicate Skill name; provider rank is only a tie-breaker inside one layer. The scope chain is part of the registry cache key, so re-parenting a blank Agent to another preset changes the next scoped read even though the Agent/session id stays the same.
 
@@ -198,7 +200,7 @@ The plugin does not manage MCP/tool registrations created inside Agent or Preset
 
 ### 3. Agent restriction
 
-On the first real `system-prompt/assemble` of a turn, the workspace config is read and locked. Authoritative config reads wait for any autosave already queued by the plugin before reading `.dsh-scope.json`.
+On the first real `system-prompt/assemble` of a turn, the workspace config is read and locked. The file is the nearest `.dsh-scope.json` from the Session's effective working directory up to its header `cwd` (inclusive), so a subagent started in a subfolder locks that subfolder's scope. Authoritative config reads wait for any autosave already queued by the plugin before reading `.dsh-scope.json`.
 
 The plugin computes the denied Host-global MCP tool-name set and installs:
 

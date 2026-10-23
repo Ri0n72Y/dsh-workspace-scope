@@ -9,6 +9,7 @@ import type {
   PromptAssemblyLike,
   ScopeConfig,
   ScopedToolsLike,
+  SessionLike,
   SkillAccess,
   SkillsServiceLike,
   SystemPromptLike,
@@ -29,10 +30,12 @@ interface RuntimePolicyDeps {
   tools: ToolsServiceLike;
   systemPrompt: SystemPromptLike;
   skillAccess: SkillAccess;
+  /** The Session's effective working directory (header cwd without the service). */
+  effectiveCwd: (session: SessionLike | undefined) => string | undefined;
 }
 
 export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): void {
-  const { configStore, skills, tools, systemPrompt, skillAccess } = deps;
+  const { configStore, skills, tools, systemPrompt, skillAccess, effectiveCwd } = deps;
   const activePolicies = new Map<string, ActivePolicy>();
   const onEvent = ctx.on as unknown as (
     name: string,
@@ -64,8 +67,11 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
   });
 
   // The AgentLoop assembles before agent/pre-step. Lock config at the first
-  // turn-owned assembly. If the MCP mask changes, rebuild once under the new
-  // ToolRuntime restriction so native and PTC presentations stay aligned.
+  // turn-owned assembly. A subagent's working directory is committed during its
+  // creation, before this first assembly, so the scope file is resolved from the
+  // final effective cwd. A later `cd` does not change the locked config. If the
+  // MCP mask changes, rebuild once under the new ToolRuntime restriction so
+  // native and PTC presentations stay aligned.
   onEvent(
     "system-prompt/assemble",
     async (
@@ -80,9 +86,11 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
 
       let active = activePolicies.get(agent.id);
       if (active === undefined) {
-        const config = await configStore.read(agent.session.header.cwd);
+        const config = await configStore.read(agent.session, signal);
         signal.throwIfAborted();
-        active = { agent, config };
+        // The resolver awaits more I/O than a single read did; keep a lock that a
+        // concurrent assembly of the same Agent may have taken meanwhile.
+        active = activePolicies.get(agent.id) ?? { agent, config };
         activePolicies.set(agent.id, active);
       }
 
@@ -120,7 +128,8 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
       await skillAccess(async () => {
         // Keep the previous shadow installed while queued. Once this Agent owns
         // the registry transaction, expose the underlying catalog, rebuild the
-        // shadows, and verify them before any downstream pre-step consumer runs.
+        // shadows for the current effective cwd, and verify them before any
+        // downstream pre-step consumer runs.
         payload.signal.throwIfAborted();
         const previous = active.skillDispose;
         delete active.skillDispose;
@@ -130,6 +139,7 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
           tools,
           payload.agent,
           active.config,
+          effectiveCwd(payload.agent.session),
           payload.signal,
         );
       });

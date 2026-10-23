@@ -29,7 +29,7 @@ dsh plugin --profile web remove dsh-workspace-scope
 
 In a blank new-session Session, click "Workspace scope" on the right side of the input card.
 
-The dialog shows model-invocable Skills from the current Agent and Host-global MCP servers. Switching Agent Presets refreshes the list for the current Agent. Toggles, search, enable-all, and disable-all save immediately to `.dsh-scope.json` in the workspace root.
+The dialog shows model-invocable Skills from the current Agent and Host-global MCP servers. Switching Agent Presets refreshes the list for the current Agent. Toggles, search, enable-all, and disable-all save immediately to the `.dsh-scope.json` the Session uses (see below).
 
 The configuration locks when the conversation starts its first real model request. Changes made before that point apply to the conversation; later changes apply only to new conversations.
 
@@ -52,6 +52,8 @@ Normally the UI is enough. You can also edit `.dsh-scope.json` manually:
 - `blacklist`: disable listed capabilities.
 - `skills`: Skill names.
 - `mcps`: Host-global MCP server names.
+
+A Session uses the nearest `.dsh-scope.json`, searched from its current working directory up to its workspace root (the Session header `cwd`), never above it. A subagent started with `cwd` in a subfolder therefore uses that subfolder's file, while a Session in the workspace root uses the root file. Without any file, everything stays enabled; the UI then creates the file in the workspace root. A scope file that is a symbolic link is read only when it points inside the workspace and is never written through.
 
 ## Scope
 

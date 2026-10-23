@@ -87,9 +87,23 @@ export interface SandboxPolicyServiceLike {
   resolve(request: { session: SessionLike; mode: "workspace-write" }): unknown;
 }
 
+export interface FsPathInfoLike {
+  type: "file" | "directory" | "symlink" | "other";
+}
+
 export interface FsServiceLike {
-  resolve(path: string): Promise<unknown>;
-  readText(target: unknown): Promise<string>;
+  resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<unknown>;
+  /** Canonical absolute path of a resolved target. */
+  processPath(target: unknown): string;
+  /** Canonical containment of two resolved targets. */
+  contains(parent: unknown, child: unknown): boolean;
+  /** Path metadata without following a final symbolic link; undefined when absent. */
+  lstat(
+    path: string,
+    opts?: { cwd?: string },
+    signal?: AbortSignal,
+  ): Promise<FsPathInfoLike | undefined>;
+  readText(target: unknown, signal?: AbortSignal): Promise<string>;
   writeText(
     target: unknown,
     content: string,
@@ -99,11 +113,27 @@ export interface FsServiceLike {
   ): Promise<unknown>;
 }
 
+/** The DSH `workingDirectory` service: the Session's effective directory. */
+export interface WorkingDirectoryLike {
+  get(session: SessionLike): string;
+}
+
+/** Where a Session's scope file is, or would be created. */
+export interface ScopeLocation {
+  /** Absolute path of the scope file; undefined when no workspace is known. */
+  path?: string;
+  /** Resolved fs target of `path`. */
+  target?: unknown;
+  /** Whether an existing scope file was found. */
+  exists: boolean;
+  /** Whether `save` may write to `path`. */
+  writable: boolean;
+}
+
 export interface ConfigStore {
-  read(cwd: string | undefined): Promise<ScopeConfig>;
+  read(session: SessionLike | undefined, signal?: AbortSignal): Promise<ScopeConfig>;
   write(
-    cwd: string | undefined,
-    config: ScopeConfig,
     session: SessionLike | undefined,
+    config: ScopeConfig,
   ): Promise<{ saved: boolean; reason?: string }>;
 }

@@ -6,6 +6,7 @@ import type {
   AgentsServiceLike,
   ConfigStore,
   ScopeConfig,
+  SessionLike,
   SkillAccess,
   SkillsServiceLike,
   ToolsServiceLike,
@@ -26,10 +27,12 @@ interface WorkspaceApiDeps {
   tools: ToolsServiceLike;
   configStore: ConfigStore;
   skillAccess: SkillAccess;
+  /** The Session's effective working directory (header cwd without the service). */
+  effectiveCwd: (session: SessionLike | undefined) => string | undefined;
 }
 
 export function createWorkspaceApi(deps: WorkspaceApiDeps): WorkspaceApi {
-  const { agents, skills, tools, configStore, skillAccess } = deps;
+  const { agents, skills, tools, configStore, skillAccess, effectiveCwd } = deps;
 
   function resolveAgent(sessionId: string): AgentLike | undefined {
     return sessionId === "" ? undefined : agents.get(sessionId);
@@ -37,7 +40,9 @@ export function createWorkspaceApi(deps: WorkspaceApiDeps): WorkspaceApi {
 
   async function overview(sessionId: string): Promise<Record<string, unknown>> {
     const agent = resolveAgent(sessionId);
-    const cwd = agent?.session.header.cwd;
+    // The same cwd tool-skill uses for the model catalog, so the list matches
+    // what the model sees in a subagent started in another folder.
+    const cwd = effectiveCwd(agent?.session);
     let skillList: Array<{ name: string; description: string }> = [];
 
     // DSH tool-skill publishes a model catalog only when a `skill` Tool is
@@ -61,7 +66,7 @@ export function createWorkspaceApi(deps: WorkspaceApiDeps): WorkspaceApi {
       server,
       toolCount: (byServer.get(server) ?? []).length,
     }));
-    return { skills: skillList, mcp, config: await configStore.read(cwd) };
+    return { skills: skillList, mcp, config: await configStore.read(agent?.session) };
   }
 
   async function save(body: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -79,7 +84,7 @@ export function createWorkspaceApi(deps: WorkspaceApiDeps): WorkspaceApi {
         ? body.mcps.filter((item): item is string => typeof item === "string")
         : [],
     };
-    return configStore.write(agent?.session.header.cwd, config, agent?.session);
+    return configStore.write(agent?.session, config);
   }
 
   return { overview, save };
