@@ -13,6 +13,7 @@ import type {
   SkillsServiceLike,
   SystemPromptLike,
   ToolsServiceLike,
+  WorkingDirectoryLike,
 } from "./types.js";
 
 type PolicyDispose = () => void | Promise<void>;
@@ -84,6 +85,8 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
         activePolicies.set(agent.id, active);
       }
 
+      // The workspace file governs subagents only when explicitly enabled.
+      if (agent.session.header.origin === "subagent" && active.config.subagents !== true) return next();
       if (active.mcpFailure !== undefined) throw active.mcpFailure.error;
 
       const denied = deniedMcpTools(active.config, globalMcpToolsMap(tools));
@@ -125,6 +128,7 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
       if (active === undefined) {
         throw new Error("dsh-workspace-scope: workspace policy is not initialized");
       }
+      if (payload.agent.session.header.origin === "subagent" && active.config.subagents !== true) return next();
 
       await skillAccess(async () => {
         // Keep the previous shadow installed while queued. Once this Agent owns
@@ -135,6 +139,17 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
         delete active.skillDispose;
         await dispose(previous);
         payload.signal.throwIfAborted();
+        // Preserve root catalog behavior. An opted-in subagent uses its own
+        // working directory for Skill discovery, just as DSH tool-skill does.
+        let childCwd: string | undefined;
+        if (payload.agent.session.header.origin === "subagent") {
+          try {
+            childCwd = (ctx.get("workingDirectory") as WorkingDirectoryLike | undefined)
+              ?.get(payload.agent.session);
+          } catch {
+            // Optional service: fall back to the original workspace directory.
+          }
+        }
         const replacement = ctx.effect(
           async () => (await installSkillPolicy(
             skills,
@@ -142,6 +157,7 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
             payload.agent,
             active.config,
             payload.signal,
+            childCwd,
           )) ?? (() => {}),
           "workspace-scope:skill-policy",
         );

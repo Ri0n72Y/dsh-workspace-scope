@@ -14,12 +14,13 @@ export async function installSkillPolicy(
   agent: AgentLike,
   config: ScopeConfig,
   signal: AbortSignal,
+  childCwd?: string,
 ): Promise<(() => void) | undefined> {
   if (config.mode === "default" || tools.get("skill", agent) === undefined) {
     return undefined;
   }
 
-  const view = { scope: agent, cwd: agent.session.header.cwd, signal };
+  const view = { scope: agent, cwd: childCwd ?? agent.session.header.cwd, signal };
   const snapshot = await skills.snapshot(view);
   signal.throwIfAborted();
   if (!snapshot.complete) {

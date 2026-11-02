@@ -6,13 +6,14 @@ import type {} from "@deepseek-ai/dsh-client-ui-layout/client";
 export interface OverviewData {
   skills: Array<{ name: string; description: string }>;
   mcp: Array<{ server: string; toolCount: number }>;
-  config: { mode?: string; skills?: string[]; mcps?: string[] };
+  config: { mode?: string; skills?: string[]; mcps?: string[]; subagents?: boolean };
 }
 
 export type ScopeMode = "default" | "whitelist" | "blacklist";
 
 export interface ScopeDraft {
   mode: ScopeMode;
+  subagents: boolean;
   skills: Set<string>;
   mcps: Set<string>;
 }
@@ -28,6 +29,7 @@ export function draftFromConfig(config: OverviewData["config"] | undefined): Sco
       : "default";
   return {
     mode,
+    subagents: value.subagents === true,
     skills: new Set(value.skills ?? []),
     mcps: new Set(value.mcps ?? []),
   };
@@ -46,6 +48,7 @@ export function toggleCapability(
   if (draft.mode === "default") {
     return {
       mode: "blacklist",
+      subagents: draft.subagents,
       skills: new Set(key === "skills" ? [name] : []),
       mcps: new Set(key === "mcps" ? [name] : []),
     };
@@ -64,7 +67,7 @@ export function setAllCapabilities(
 ): ScopeDraft {
   if (draft.mode === "default") {
     if (enabled) return draft;
-    return { mode: "blacklist", skills: currentSkills, mcps: currentMcps };
+    return { ...draft, mode: "blacklist", skills: currentSkills, mcps: currentMcps };
   }
 
   const update = (listed: Set<string>, current: Set<string>): Set<string> => {

@@ -99,6 +99,7 @@ function ScopeModal(props: ScopeModalProps) {
       mode: next.mode,
       skills: [...next.skills],
       mcps: [...next.mcps],
+      subagents: next.subagents,
     };
     saveTailRef.current = saveTailRef.current.then(async () => {
       try {
@@ -161,6 +162,13 @@ function ScopeModal(props: ScopeModalProps) {
                 仅显示当前 Agent 已提供的技能，并对这些技能和 Host 全局 MCP 应用工作区策略。
                 切换 Agent Preset 后技能列表会同步更新；改动即时保存，只影响该工作区之后开始的新对话。
               </p>
+              <label className={css.subagentOption}>
+                <input type="checkbox" checked={draft?.subagents === true} onChange={(event) => {
+                  if (draft) applyDraft({ ...draft, subagents: event.currentTarget.checked });
+                }} />
+                <span>子代理</span>
+                <span className={css.subagentHint}>勾选后将能力限制应用到子代理，默认不限制子代理。</span>
+              </label>
               <label className={css.search}>
                 <SearchIcon />
                 <input type="search" value={query} placeholder="搜索技能或全局 MCP…" aria-label="搜索技能或全局 MCP" onChange={(event) => setQuery(event.currentTarget.value)} />
