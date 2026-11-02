@@ -35,6 +35,8 @@ Desktop `0.2.1-rc.2` 请从侧栏 **插件** 页面安装 `dsh-workspace-scope`�
 
 配置在会话第一次真正发起模型请求时锁定。因此开始对话前的修改会应用到该会话；之后的修改只影响新的会话。
 
+默认只限制主对话，不限制子代理。勾选「子代理」后，根工作区的同一份策略也会限制子代理的 Skill 和 Host 全局 MCP。子代理仍从自己的有效工作目录发现 Skill；插件不读取子目录里的其他 `.dsh-scope.json`。
+
 ## 配置
 
 通常直接使用 UI 即可。也可以手动编辑工作区根目录的 `.dsh-scope.json`：
@@ -44,7 +46,8 @@ Desktop `0.2.1-rc.2` 请从侧栏 **插件** 页面安装 `dsh-workspace-scope`�
   "default": {
     "mode": "whitelist",
     "skills": ["<skill-name>"],
-    "mcps": ["<server-name>"]
+    "mcps": ["<server-name>"],
+    "subagents": false
   }
 }
 ```
@@ -54,6 +57,7 @@ Desktop `0.2.1-rc.2` 请从侧栏 **插件** 页面安装 `dsh-workspace-scope`�
 - `blacklist`：禁用列表中的能力。
 - `skills`：Skill 名称。
 - `mcps`：Host 全局 MCP server 名称。
+- `subagents`：是否对子代理也应用 Workspace 限制；默认 `false`，旧配置无需修改。
 
 ## 边界
 
