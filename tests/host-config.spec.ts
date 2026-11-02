@@ -60,6 +60,15 @@ describe('parseScopeConfig', () => {
     expect(cfg.mcps).toEqual([])
   })
 
+  it('enables subagent restrictions only when explicitly true', () => {
+    const parse = (subagents: unknown) => parseScopeConfig(JSON.stringify({
+      default: { mode: 'blacklist', skills: [], mcps: [], subagents },
+    }))
+    expect(parse(true).subagents).toBe(true)
+    expect(parse(false).subagents).toBeUndefined()
+    expect(parse('true').subagents).toBeUndefined()
+  })
+
   it('ignores document-level keys outside default (legacy dynamic-build format)', () => {
     // The old dynamic build wrote {disabledSkills, disabledMcp}; that shape
     // must degrade safely to everything enabled, not crash or leak.

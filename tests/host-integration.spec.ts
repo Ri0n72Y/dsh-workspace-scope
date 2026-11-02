@@ -57,6 +57,8 @@ type TestAgent = ReturnType<ReturnType<typeof makeEnv>['agent']>
 
 function makeEnv(opts: {
   configText?: string
+  subagentIds?: string[]
+  workingDirectories?: Record<string, string>
   blockedSkillRegistrations?: string[]
   incompleteSkillSnapshots?: string[]
   missingAgents?: string[]
@@ -88,6 +90,8 @@ function makeEnv(opts: {
   let mcpDisposeFailed = false
   const listeners: Record<string, Listener[]> = {}
   const agentMap = new Map<string, ReturnType<typeof createAgent>>()
+  const effectiveBySession = new WeakMap<object, string>()
+  const skillSnapshotCwds: Array<{ agentId: string; cwd: unknown }> = []
   let routeHandler: ((req: unknown, res: unknown) => Promise<void>) | null = null
 
   const signal = { throwIfAborted() {} }
@@ -119,9 +123,12 @@ function makeEnv(opts: {
         }
       },
     }
+    const session = { header: { cwd: '/ws', ...(opts.subagentIds?.includes(id) ? { origin: 'subagent' } : {}) } }
+    const effective = opts.workingDirectories?.[id]
+    if (effective !== undefined) effectiveBySession.set(session, effective)
     return {
       id,
-      session: { header: { cwd: '/ws' } },
+      session,
       ctx: {
         // Match the Cordis Context seam used by production. Keeping the named
         // faces also makes this fixture useful for assertions on scoped effects.
@@ -235,8 +242,9 @@ function makeEnv(opts: {
       if (name === 'systemPrompt') return systemPrompt
       if (name === 'skills') {
         return {
-          snapshot: async (options: { scope?: { id?: string } } = {}) => {
+          snapshot: async (options: { scope?: { id?: string }; cwd?: unknown } = {}) => {
             const id = options.scope?.id
+            if (id !== undefined) skillSnapshotCwds.push({ agentId: id, cwd: options.cwd })
             const calls = id === undefined ? 0 : (skillSnapshotCalls.get(id) ?? 0)
             if (id !== undefined) skillSnapshotCalls.set(id, calls + 1)
             const revision = skillRevision
@@ -278,6 +286,9 @@ function makeEnv(opts: {
           },
         }
       }
+      if (name === 'workingDirectory' && opts.workingDirectories !== undefined) {
+        return { get: (session: object): string => effectiveBySession.get(session) ?? '/ws' }
+      }
       if (name === 'sandboxPolicy') return { resolve: () => ({}) }
       return undefined
     },
@@ -298,6 +309,7 @@ function makeEnv(opts: {
     systemPrompt,
     restrictCalls,
     skillRegistrations,
+    skillSnapshotCwds,
     routeHandler: () => routeHandler,
   }
 }
@@ -548,6 +560,40 @@ describe('workspace-scope host behavior', () => {
     ])
     await dispatchPreStep(env.listeners, payloadOf(second))
     expect(env.skillRegistrations[2]!.skill.name).toBe('keep-skill')
+  })
+
+  it('leaves subagent Skill and Tool catalogs unrestricted by default', async () => {
+    const env = makeEnv({ subagentIds: ['child'], workingDirectories: { child: '/ws/subproject' } })
+    apply(env.ctx as never)
+    const child = env.agent('child')
+
+    const assembly = await env.systemPrompt.assemble({ agent: child, signal: env.signal })
+    await dispatchPreStep(env.listeners, payloadOf(child))
+
+    expect(assembly.tools.map((tool) => tool.name)).toEqual(SERVER_TOOLS)
+    expect(env.restrictCalls).toEqual([])
+    expect(env.skillRegistrations).toEqual([])
+    expect(env.skillSnapshotCwds).toEqual([])
+  })
+
+  it('applies the root workspace policy to an opted-in subagent using its own Skill cwd', async () => {
+    const env = makeEnv({
+      configText: JSON.stringify({ default: {
+        mode: 'whitelist', skills: ['keep-skill'], mcps: ['playwright'], subagents: true,
+      } }),
+      subagentIds: ['child'],
+      workingDirectories: { child: '/ws/subproject' },
+    })
+    apply(env.ctx as never)
+    const child = env.agent('child')
+    await env.systemPrompt.assemble({ agent: child, signal: env.signal })
+    await dispatchPreStep(env.listeners, payloadOf(child))
+
+    expect(env.restrictCalls.map((entry) => entry.deny)).toEqual([['mcp__github__list']])
+    expect(env.skillRegistrations.map((entry) => entry.skill.name)).toEqual(['drop-skill'])
+    const childReads = env.skillSnapshotCwds.filter((entry) => entry.agentId === 'child')
+    expect(childReads.length).toBeGreaterThan(0)
+    expect(childReads.every((entry) => entry.cwd === '/ws/subproject')).toBe(true)
   })
 
   it('serializes concurrent Skill policy refreshes and overview reads across Agents', async () => {
