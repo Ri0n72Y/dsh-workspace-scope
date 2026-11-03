@@ -200,7 +200,7 @@ The plugin does not manage MCP/tool registrations created inside Agent or Preset
 
 On the first real `system-prompt/assemble` of a turn, the workspace config is read and locked. Authoritative config reads wait for any autosave already queued by the plugin before reading `.dsh-scope.json`.
 
-Workspace policy stays at `session.header.cwd/.dsh-scope.json`; it is not a nested-directory lookup. The `default.subagents` flag is opt-in (`false` if absent). For Sessions with `header.origin === 'subagent'`, both MCP restrictions and Skill shadows are bypassed unless the flag is `true`. When opted in, subagent Skill snapshots use its `workingDirectory.get(session)` (falling back to the header cwd), matching DSH tool-skill discovery; root conversation Skill snapshots keep their existing header-cwd lookup. No capability registrations are added by this plugin.
+Workspace policy stays at `session.header.cwd/.dsh-scope.json`; it is not a nested-directory lookup. The `default.subagents` flag is opt-in (`false` if absent). For Sessions with `header.origin === 'subagent'`, both MCP restrictions and Skill shadows are bypassed unless the flag is `true`. When opted in, subagent Skill snapshots use the validated directory from DSH `workingDirectory.ensure(agent, signal)`, as `tool-skill` does. If validation or recovery fails, the restricted step fails closed rather than silently falling back to a different catalog; root conversation Skill snapshots keep their existing header-cwd lookup. The management UI does not list subagent-only Skills, but whitelist rules still cover them; users may add their names manually to `default.skills`. No capability registrations are added by this plugin.
 
 The plugin computes the denied Host-global MCP tool-name set and installs:
 

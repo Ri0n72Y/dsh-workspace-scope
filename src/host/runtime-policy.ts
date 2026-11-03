@@ -139,16 +139,19 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
         delete active.skillDispose;
         await dispose(previous);
         payload.signal.throwIfAborted();
-        // Preserve root catalog behavior. An opted-in subagent uses its own
-        // working directory for Skill discovery, just as DSH tool-skill does.
+        // DSH tool-skill uses ensure() before reading the catalog. Using get()
+        // here could snapshot a deleted directory while tool-skill recovers it.
+        // Do not silently fall back to the workspace root for a restricted child.
         let childCwd: string | undefined;
-        if (payload.agent.session.header.origin === "subagent") {
-          try {
-            childCwd = (ctx.get("workingDirectory") as WorkingDirectoryLike | undefined)
-              ?.get(payload.agent.session);
-          } catch {
-            // Optional service: fall back to the original workspace directory.
+        if (payload.agent.session.header.origin === "subagent"
+          && active.config.mode !== "default"
+          && tools.get("skill", payload.agent) !== undefined) {
+          const workingDirectory = ctx.get("workingDirectory") as WorkingDirectoryLike | undefined;
+          if (workingDirectory === undefined) {
+            throw new Error("dsh-workspace-scope: subagent working directory service is unavailable");
           }
+          childCwd = await workingDirectory.ensure(payload.agent, payload.signal);
+          payload.signal.throwIfAborted();
         }
         const replacement = ctx.effect(
           async () => (await installSkillPolicy(

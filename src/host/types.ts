@@ -101,7 +101,7 @@ export interface FsServiceLike {
 }
 
 export interface WorkingDirectoryLike {
-  get(session: SessionLike): string;
+  ensure(agent: AgentLike, signal: AbortSignal): Promise<string>;
 }
 
 export interface ConfigStore {

@@ -59,6 +59,8 @@ function makeEnv(opts: {
   configText?: string
   subagentIds?: string[]
   workingDirectories?: Record<string, string>
+  recoveredWorkingDirectories?: Record<string, string>
+  failWorkingDirectoryEnsure?: boolean
   blockedSkillRegistrations?: string[]
   incompleteSkillSnapshots?: string[]
   missingAgents?: string[]
@@ -287,7 +289,17 @@ function makeEnv(opts: {
         }
       }
       if (name === 'workingDirectory' && opts.workingDirectories !== undefined) {
-        return { get: (session: object): string => effectiveBySession.get(session) ?? '/ws' }
+        return {
+          get: (session: object): string => effectiveBySession.get(session) ?? '/ws',
+          ensure: async (selectedAgent: { id: string; session: object }): Promise<string> => {
+            if (opts.failWorkingDirectoryEnsure === true) {
+              throw new Error('working directory unavailable')
+            }
+            const recovered = opts.recoveredWorkingDirectories?.[selectedAgent.id]
+            if (recovered !== undefined) effectiveBySession.set(selectedAgent.session, recovered)
+            return effectiveBySession.get(selectedAgent.session) ?? '/ws'
+          },
+        }
       }
       if (name === 'sandboxPolicy') return { resolve: () => ({}) }
       return undefined
@@ -594,6 +606,43 @@ describe('workspace-scope host behavior', () => {
     const childReads = env.skillSnapshotCwds.filter((entry) => entry.agentId === 'child')
     expect(childReads.length).toBeGreaterThan(0)
     expect(childReads.every((entry) => entry.cwd === '/ws/subproject')).toBe(true)
+  })
+
+  it('shadows Skills from the recovered subagent directory, not the stale one', async () => {
+    const env = makeEnv({
+      configText: JSON.stringify({ default: {
+        mode: 'whitelist', skills: ['keep-skill'], mcps: [], subagents: true,
+      } }),
+      subagentIds: ['child'],
+      workingDirectories: { child: '/ws/deleted-project' },
+      recoveredWorkingDirectories: { child: '/ws' },
+    })
+    apply(env.ctx as never)
+    const child = env.agent('child')
+    await env.systemPrompt.assemble({ agent: child, signal: env.signal })
+    await dispatchPreStep(env.listeners, payloadOf(child))
+
+    expect(env.skillRegistrations.map((entry) => entry.skill.name)).toEqual(['drop-skill'])
+    expect(env.skillSnapshotCwds.filter((entry) => entry.agentId === 'child')
+      .every((entry) => entry.cwd === '/ws')).toBe(true)
+  })
+
+  it('fails closed when a restricted subagent directory cannot be validated', async () => {
+    const env = makeEnv({
+      configText: JSON.stringify({ default: {
+        mode: 'whitelist', skills: ['keep-skill'], mcps: [], subagents: true,
+      } }),
+      subagentIds: ['child'],
+      workingDirectories: { child: '/ws/unavailable' },
+      failWorkingDirectoryEnsure: true,
+    })
+    apply(env.ctx as never)
+    const child = env.agent('child')
+    await env.systemPrompt.assemble({ agent: child, signal: env.signal })
+
+    await expect(dispatchPreStep(env.listeners, payloadOf(child)))
+      .rejects.toThrow('working directory unavailable')
+    expect(env.skillSnapshotCwds).toEqual([])
   })
 
   it('serializes concurrent Skill policy refreshes and overview reads across Agents', async () => {

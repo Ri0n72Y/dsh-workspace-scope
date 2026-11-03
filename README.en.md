@@ -35,7 +35,7 @@ The dialog shows model-invocable Skills from the current Agent and Host-global M
 
 The configuration locks when the conversation starts its first real model request. Changes made before that point apply to the conversation; later changes apply only to new conversations.
 
-By default, restrictions apply to root conversations only. Select **Subagents** to apply the same root-workspace Skill and Host-global MCP policy to subagents. Subagents still discover Skills from their own effective working directory. This plugin does not search for nested `.dsh-scope.json` files.
+By default, restrictions apply to root conversations only. Select **Subagents** to apply the same root-workspace Skill and Host-global MCP policy to subagents. Subagents still discover Skills from their own effective working directory. This plugin does not search for nested `.dsh-scope.json` files. The management UI only lists Skills visible to the root Agent. Skills unique to a subagent's directory are not listed there, but the same whitelist still applies to them; to allow one, add its name to `default.skills` in the root `.dsh-scope.json` manually.
 
 ## Configuration
 
