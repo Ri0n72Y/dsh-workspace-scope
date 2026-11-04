@@ -1,6 +1,6 @@
 # dsh-workspace-scope
 
-[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DSH compatibility](https://img.shields.io/badge/DSH%20baseline-0.2.1--rc.5-f59e0b)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.5) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
+[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DSH verified](https://img.shields.io/badge/DSH%20verified-0.2.1--rc.5-f59e0b)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.5) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
 
 Enable or disable the current Agent's existing Skills and inherited Host-global MCP servers per DeepSeek Harness workspace.
 
@@ -9,7 +9,9 @@ This plugin only controls capability scope. It does not install, discover, or pr
 中文版：[README.md](README.md)
 
 > [!IMPORTANT]
-> `dsh-workspace-scope v0.5.4` **uses DeepSeek Harness `0.2.1-rc.5` as the build and validation baseline**. `engines.dsh >=0.2.1-rc.2` still admits previously supported versions; the regression target is `rc.5`, not every later release. The Web surface runs frozen install, typecheck, build, tests, and coverage against the real `rc.5` dependency graph. Packaged-Desktop installation, UI, and policy smoke are still required before calling Desktop compatibility field-tested.
+> **Currently verified DSH version: `0.2.1-rc.5` (Web).** `dsh-workspace-scope v0.5.4` has passed dependency installation, typecheck, build, tests, and coverage against this version. `engines.dsh >=0.2.1-rc.2` is the permitted loading range; it does not mean every version in that range has been verified. Packaged-Desktop installation, UI, and policy smoke tests on `0.2.1-rc.5` are still pending.
+>
+> After validating a new DSH version, update the verified version here, the badge above, and the release notes together. Do not claim support for untested versions.
 
 ## Install
 

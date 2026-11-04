@@ -1,6 +1,6 @@
 # dsh-workspace-scope
 
-[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DSH compatibility](https://img.shields.io/badge/DSH%20baseline-0.2.1--rc.5-f59e0b)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.5) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
+[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DSH verified](https://img.shields.io/badge/DSH%20verified-0.2.1--rc.5-f59e0b)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.5) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
 
 为 DeepSeek Harness 按工作区启用或禁用当前 Agent 已拥有的 Skill 与 Host 全局 MCP。
 
@@ -9,7 +9,9 @@
 English: [README.en.md](README.en.md)
 
 > [!IMPORTANT]
-> `dsh-workspace-scope v0.5.4` **以 DeepSeek Harness `0.2.1-rc.5` 为构建与验证基线**。`engines.dsh >=0.2.1-rc.2` 保留对先前兼容版本的加载许可；实际回归测试目标为 `rc.5`，不代表所有后续版本都已测试。Web 侧使用 `rc.5` 的真实依赖运行 frozen install、类型检查、构建、测试及 coverage gate。Desktop 仍需完成已打包应用上的安装、UI 与策略 smoke，才可宣称实机验证。
+> **当前已验证支持的 DSH 版本：`0.2.1-rc.5`（Web）。** `dsh-workspace-scope v0.5.4` 已基于该版本完成依赖安装、类型检查、构建、测试与覆盖率验证。`engines.dsh >=0.2.1-rc.2` 是插件允许加载的版本范围，不代表范围内所有版本均已通过验证。Desktop `0.2.1-rc.5` 仍需完成打包应用中的安装、界面与策略实机测试。
+>
+> 后续完成新 DSH 版本的兼容性验证时，同步更新这里的已验证版本、页首徽章及发布记录；不提前宣称未验证版本受支持。
 
 ## 安装
 
