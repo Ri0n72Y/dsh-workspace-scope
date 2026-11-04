@@ -1,6 +1,8 @@
 // @vitest-environment node
+import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import { apply } from '../src/index'
+import { registerRuntimePolicy } from '../src/host/runtime-policy'
 
 const SERVER_TOOLS = [
   'mcp__playwright__navigate',
@@ -55,12 +57,17 @@ type TestAgent = ReturnType<ReturnType<typeof makeEnv>['agent']>
 
 function makeEnv(opts: {
   configText?: string
+  subagentIds?: string[]
+  workingDirectories?: Record<string, string>
+  recoveredWorkingDirectories?: Record<string, string>
+  failWorkingDirectoryEnsure?: boolean
   blockedSkillRegistrations?: string[]
   incompleteSkillSnapshots?: string[]
   missingAgents?: string[]
   missingSkillTools?: string[]
   lateSkillOnSecondSnapshot?: boolean
   revisionSensitiveSkillSnapshots?: boolean
+  failFirstMcpDispose?: boolean
   writeGate?: Promise<void>
 } = {}) {
   const blockedSkillRegistrations = new Set(opts.blockedSkillRegistrations ?? [])
@@ -82,8 +89,11 @@ function makeEnv(opts: {
   }> = []
   const skillSnapshotCalls = new Map<string, number>()
   let skillRevision = 0
+  let mcpDisposeFailed = false
   const listeners: Record<string, Listener[]> = {}
   const agentMap = new Map<string, ReturnType<typeof createAgent>>()
+  const effectiveBySession = new WeakMap<object, string>()
+  const skillSnapshotCwds: Array<{ agentId: string; cwd: unknown }> = []
   let routeHandler: ((req: unknown, res: unknown) => Promise<void>) | null = null
 
   const signal = { throwIfAborted() {} }
@@ -93,7 +103,13 @@ function makeEnv(opts: {
       restrict: (filter: { deny: string[] }): (() => void) => {
         const call = { agentId: id, deny: [...filter.deny], disposed: false }
         restrictCalls.push(call)
-        return () => { call.disposed = true }
+        return () => {
+          if (opts.failFirstMcpDispose === true && !mcpDisposeFailed) {
+            mcpDisposeFailed = true
+            throw new Error('mcp dispose failed')
+          }
+          call.disposed = true
+        }
       },
     }
     const scopedSkills = {
@@ -109,9 +125,12 @@ function makeEnv(opts: {
         }
       },
     }
+    const session = { header: { cwd: '/ws', ...(opts.subagentIds?.includes(id) ? { origin: 'subagent' } : {}) } }
+    const effective = opts.workingDirectories?.[id]
+    if (effective !== undefined) effectiveBySession.set(session, effective)
     return {
       id,
-      session: { header: { cwd: '/ws' } },
+      session,
       ctx: {
         // Match the Cordis Context seam used by production. Keeping the named
         // faces also makes this fixture useful for assertions on scoped effects.
@@ -188,6 +207,34 @@ function makeEnv(opts: {
     },
   }
 
+  // Match the Cordis effect contract used by production: setup may be
+  // asynchronous, the returned disposer is awaitable, and disposal racing
+  // setup waits for the setup result before unwinding it.
+  const effect = (cb: () => unknown) => {
+    let inner: (() => unknown) | undefined
+    let disposed = false
+    let cleanupStarted = false
+    const setup = Promise.resolve(cb()).then(async (value) => {
+      if (typeof value !== 'function') return
+      if (disposed) await value()
+      else inner = value
+    })
+    const dispose = async (): Promise<void> => {
+      if (cleanupStarted) return
+      cleanupStarted = true
+      disposed = true
+      await setup
+      const current = inner
+      inner = undefined
+      if (current !== undefined) await current()
+    }
+    const wrapper = () => dispose()
+    return Object.assign(wrapper, {
+      then: (onFulfilled: (value: typeof dispose) => unknown, onRejected?: (reason: unknown) => unknown) =>
+        setup.then(() => dispose).then(onFulfilled, onRejected),
+    })
+  }
+
   const ctx = {
     get: (name: string): unknown => {
       if (name === 'webServer') return webServer
@@ -197,8 +244,9 @@ function makeEnv(opts: {
       if (name === 'systemPrompt') return systemPrompt
       if (name === 'skills') {
         return {
-          snapshot: async (options: { scope?: { id?: string } } = {}) => {
+          snapshot: async (options: { scope?: { id?: string }; cwd?: unknown } = {}) => {
             const id = options.scope?.id
+            if (id !== undefined) skillSnapshotCwds.push({ agentId: id, cwd: options.cwd })
             const calls = id === undefined ? 0 : (skillSnapshotCalls.get(id) ?? 0)
             if (id !== undefined) skillSnapshotCalls.set(id, calls + 1)
             const revision = skillRevision
@@ -240,10 +288,23 @@ function makeEnv(opts: {
           },
         }
       }
+      if (name === 'workingDirectory' && opts.workingDirectories !== undefined) {
+        return {
+          get: (session: object): string => effectiveBySession.get(session) ?? '/ws',
+          ensure: async (selectedAgent: { id: string; session: object }): Promise<string> => {
+            if (opts.failWorkingDirectoryEnsure === true) {
+              throw new Error('working directory unavailable')
+            }
+            const recovered = opts.recoveredWorkingDirectories?.[selectedAgent.id]
+            if (recovered !== undefined) effectiveBySession.set(selectedAgent.session, recovered)
+            return effectiveBySession.get(selectedAgent.session) ?? '/ws'
+          },
+        }
+      }
       if (name === 'sandboxPolicy') return { resolve: () => ({}) }
       return undefined
     },
-    effect: (cb: () => void): (() => void) => { cb(); return () => {} },
+    effect,
     on: (name: string, fn: Listener): (() => boolean) => {
       ;(listeners[name] ??= []).push(fn)
       return () => true
@@ -260,6 +321,7 @@ function makeEnv(opts: {
     systemPrompt,
     restrictCalls,
     skillRegistrations,
+    skillSnapshotCwds,
     routeHandler: () => routeHandler,
   }
 }
@@ -512,6 +574,77 @@ describe('workspace-scope host behavior', () => {
     expect(env.skillRegistrations[2]!.skill.name).toBe('keep-skill')
   })
 
+  it('leaves subagent Skill and Tool catalogs unrestricted by default', async () => {
+    const env = makeEnv({ subagentIds: ['child'], workingDirectories: { child: '/ws/subproject' } })
+    apply(env.ctx as never)
+    const child = env.agent('child')
+
+    const assembly = await env.systemPrompt.assemble({ agent: child, signal: env.signal })
+    await dispatchPreStep(env.listeners, payloadOf(child))
+
+    expect(assembly.tools.map((tool) => tool.name)).toEqual(SERVER_TOOLS)
+    expect(env.restrictCalls).toEqual([])
+    expect(env.skillRegistrations).toEqual([])
+    expect(env.skillSnapshotCwds).toEqual([])
+  })
+
+  it('applies the root workspace policy to an opted-in subagent using its own Skill cwd', async () => {
+    const env = makeEnv({
+      configText: JSON.stringify({ default: {
+        mode: 'whitelist', skills: ['keep-skill'], mcps: ['playwright'], subagents: true,
+      } }),
+      subagentIds: ['child'],
+      workingDirectories: { child: '/ws/subproject' },
+    })
+    apply(env.ctx as never)
+    const child = env.agent('child')
+    await env.systemPrompt.assemble({ agent: child, signal: env.signal })
+    await dispatchPreStep(env.listeners, payloadOf(child))
+
+    expect(env.restrictCalls.map((entry) => entry.deny)).toEqual([['mcp__github__list']])
+    expect(env.skillRegistrations.map((entry) => entry.skill.name)).toEqual(['drop-skill'])
+    const childReads = env.skillSnapshotCwds.filter((entry) => entry.agentId === 'child')
+    expect(childReads.length).toBeGreaterThan(0)
+    expect(childReads.every((entry) => entry.cwd === '/ws/subproject')).toBe(true)
+  })
+
+  it('shadows Skills from the recovered subagent directory, not the stale one', async () => {
+    const env = makeEnv({
+      configText: JSON.stringify({ default: {
+        mode: 'whitelist', skills: ['keep-skill'], mcps: [], subagents: true,
+      } }),
+      subagentIds: ['child'],
+      workingDirectories: { child: '/ws/deleted-project' },
+      recoveredWorkingDirectories: { child: '/ws' },
+    })
+    apply(env.ctx as never)
+    const child = env.agent('child')
+    await env.systemPrompt.assemble({ agent: child, signal: env.signal })
+    await dispatchPreStep(env.listeners, payloadOf(child))
+
+    expect(env.skillRegistrations.map((entry) => entry.skill.name)).toEqual(['drop-skill'])
+    expect(env.skillSnapshotCwds.filter((entry) => entry.agentId === 'child')
+      .every((entry) => entry.cwd === '/ws')).toBe(true)
+  })
+
+  it('fails closed when a restricted subagent directory cannot be validated', async () => {
+    const env = makeEnv({
+      configText: JSON.stringify({ default: {
+        mode: 'whitelist', skills: ['keep-skill'], mcps: [], subagents: true,
+      } }),
+      subagentIds: ['child'],
+      workingDirectories: { child: '/ws/unavailable' },
+      failWorkingDirectoryEnsure: true,
+    })
+    apply(env.ctx as never)
+    const child = env.agent('child')
+    await env.systemPrompt.assemble({ agent: child, signal: env.signal })
+
+    await expect(dispatchPreStep(env.listeners, payloadOf(child)))
+      .rejects.toThrow('working directory unavailable')
+    expect(env.skillSnapshotCwds).toEqual([])
+  })
+
   it('serializes concurrent Skill policy refreshes and overview reads across Agents', async () => {
     const env = makeEnv({
       configText: BLACKLIST_TEXT,
@@ -571,6 +704,28 @@ describe('workspace-scope host behavior', () => {
     expect(env.skillRegistrations[0]!.disposed).toBe(true)
   })
 
+  it('fails closed when the previous MCP restriction cannot be disposed', async () => {
+    const env = makeEnv({ failFirstMcpDispose: true })
+    apply(env.ctx as never)
+    const agent = env.agent('a1')
+
+    await env.systemPrompt.assemble({ agent, signal: env.signal })
+    expect(env.restrictCalls).toHaveLength(1)
+
+    env.state.serverTools.push('mcp__github__create')
+    await expect(env.systemPrompt.assemble({ agent, signal: env.signal }))
+      .rejects.toThrow('mcp dispose failed')
+    expect(env.restrictCalls).toHaveLength(1)
+
+    // Cordis public effect disposers are single-shot. Persist the cleanup
+    // failure in Agent policy state so later assemblies remain fail-closed
+    // instead of treating a second no-op dispose as recovery.
+    await expect(env.systemPrompt.assemble({ agent, signal: env.signal }))
+      .rejects.toThrow('mcp dispose failed')
+    expect(env.restrictCalls).toHaveLength(1)
+    expect(env.restrictCalls[0]!.disposed).toBe(false)
+  })
+
   it('reassembles only when the effective denied MCP set changes', async () => {
     const env = makeEnv()
     apply(env.ctx as never)
@@ -595,5 +750,108 @@ describe('workspace-scope host behavior', () => {
     await env.systemPrompt.assemble({ agent: first, signal: env.signal })
     expect(env.restrictCalls).toHaveLength(2)
     expect(env.skillRegistrations).toHaveLength(0)
+  })
+  it('unwinds Agent-scoped policy effects when plugin unload races async Skill setup', async () => {
+    const root = new Context()
+    let pluginCtx!: Context
+    let releaseGet!: () => void
+    let markGetStarted!: () => void
+    const getGate = new Promise<void>((resolve) => { releaseGet = resolve })
+    const getStarted = new Promise<void>((resolve) => { markGetStarted = resolve })
+    let skillShadowed = false
+    let skillRegistered = false
+    let skillDisposed = false
+    let mcpDisposed = false
+
+    const agent = {
+      id: 'a1',
+      session: { header: { cwd: '/ws' } },
+      ctx: {
+        get: (name: string): unknown => {
+          if (name === 'skills') {
+            return {
+              register: (definition: typeof SKILLS[number]): (() => void) => {
+                skillRegistered = true
+                skillShadowed = definition.invocation?.modelInvocable === false
+                return () => {
+                  skillDisposed = true
+                  skillShadowed = false
+                }
+              },
+            }
+          }
+          if (name === 'tools') {
+            return {
+              restrict: (): (() => void) => () => { mcpDisposed = true },
+            }
+          }
+          return undefined
+        },
+      },
+    }
+    const skills = {
+      snapshot: async () => ({
+        skills: [{
+          ...SKILLS[1]!,
+          invocation: { modelInvocable: !skillShadowed, userInvocable: true },
+        }],
+        complete: true,
+      }),
+      get: async () => {
+        markGetStarted()
+        await getGate
+        return SKILLS[1]
+      },
+    }
+    const tools = {
+      get: (name: string): unknown => name === 'skill' ? { name } : undefined,
+      schemas: () => [{ name: 'mcp__github__list' }],
+    }
+    const configStore = {
+      read: async () => ({
+        mode: 'blacklist' as const,
+        skills: ['drop-skill'],
+        mcps: ['github'],
+      }),
+      write: async () => ({ saved: true }),
+    }
+    const systemPrompt = { assemble: async () => ({}) }
+    const plugin = root.plugin((ctx: Context) => {
+      pluginCtx = ctx
+      registerRuntimePolicy(ctx, {
+        configStore,
+        skills,
+        tools,
+        systemPrompt,
+        skillAccess: async (operation) => operation(),
+      })
+    })
+    await plugin
+
+    const signal = { throwIfAborted() {} } as unknown as AbortSignal
+    const events = pluginCtx as Context & {
+      waterfall(name: string, ...args: unknown[]): Promise<unknown>
+    }
+    await events.waterfall(
+      'system-prompt/assemble',
+      {},
+      { agent, signal },
+      () => Promise.resolve({}),
+    )
+    const preStep = events.waterfall(
+      'agent/pre-step',
+      { agent, signal },
+      () => Promise.resolve({ kind: 'enter', messages: [] }),
+    )
+    await getStarted
+
+    const unloading = plugin.dispose()
+    await Promise.resolve()
+    releaseGet()
+    await Promise.allSettled([preStep, unloading])
+
+    expect(skillRegistered).toBe(true)
+    expect(skillDisposed).toBe(true)
+    expect(mcpDisposed).toBe(true)
   })
 })

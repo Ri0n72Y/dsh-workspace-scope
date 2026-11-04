@@ -78,6 +78,7 @@ export function createWorkspaceApi(deps: WorkspaceApiDeps): WorkspaceApi {
       mcps: Array.isArray(body.mcps)
         ? body.mcps.filter((item): item is string => typeof item === "string")
         : [],
+      subagents: body.subagents === true,
     };
     return configStore.write(agent?.session.header.cwd, config, agent?.session);
   }

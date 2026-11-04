@@ -13,14 +13,17 @@ import type {
   SkillsServiceLike,
   SystemPromptLike,
   ToolsServiceLike,
+  WorkingDirectoryLike,
 } from "./types.js";
 
+type PolicyDispose = () => void | Promise<void>;
+
 interface ActivePolicy {
-  agent: AgentLike;
   config: ScopeConfig;
   mcpKey?: string;
-  skillDispose?: () => void;
-  mcpDispose?: () => void;
+  mcpFailure?: { error: unknown };
+  skillDispose?: PolicyDispose;
+  mcpDispose?: PolicyDispose;
 }
 
 interface RuntimePolicyDeps {
@@ -39,28 +42,24 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
     listener: (...args: never[]) => unknown,
     options?: boolean | { prepend?: boolean },
   ) => unknown;
-  const dispose = (fn: (() => void) | undefined) => {
-    if (fn === undefined) return;
-    try {
-      fn();
-    } catch {
-      // Agent scope teardown may already have removed the registration.
-    }
+  const dispose = async (fn: PolicyDispose | undefined): Promise<void> => {
+    if (fn !== undefined) await fn();
+  };
+  const disposeOnTeardown = (fn: PolicyDispose | undefined): void => {
+    void dispose(fn).catch((error: unknown) => { ctx.logger.error(error); });
   };
 
+  // Agent-scoped Skill/Tool registrations below are adopted by this plugin
+  // through ctx.effect(). Dynamic effects unwind before this state cleanup.
   ctx.effect(() => () => {
-    for (const policy of activePolicies.values()) {
-      dispose(policy.skillDispose);
-      dispose(policy.mcpDispose);
-    }
     activePolicies.clear();
-  });
+  }, "workspace-scope:policy-state");
 
   onEvent("agent/disposed", ({ agent }: { agent: AgentLike }) => {
     const policy = activePolicies.get(agent.id);
-    dispose(policy?.skillDispose);
-    dispose(policy?.mcpDispose);
     activePolicies.delete(agent.id);
+    disposeOnTeardown(policy?.skillDispose);
+    disposeOnTeardown(policy?.mcpDispose);
   });
 
   // The AgentLoop assembles before agent/pre-step. Lock config at the first
@@ -82,24 +81,37 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
       if (active === undefined) {
         const config = await configStore.read(agent.session.header.cwd);
         signal.throwIfAborted();
-        active = { agent, config };
+        active = { config };
         activePolicies.set(agent.id, active);
       }
+
+      // The workspace file governs subagents only when explicitly enabled.
+      if (agent.session.header.origin === "subagent" && active.config.subagents !== true) return next();
+      if (active.mcpFailure !== undefined) throw active.mcpFailure.error;
 
       const denied = deniedMcpTools(active.config, globalMcpToolsMap(tools));
       const key = JSON.stringify(denied);
       if (active.mcpKey === key) return next();
 
+      const previous = active.mcpDispose;
+      try {
+        await dispose(previous);
+      } catch (error) {
+        active.mcpFailure = { error };
+        throw error;
+      }
+      signal.throwIfAborted();
+
       const replacement = denied.length === 0
         ? undefined
-        : getAgentService<ScopedToolsLike>(agent, "tools").restrict({ deny: denied });
-      const previous = active.mcpDispose;
+        : ctx.effect(
+            () => getAgentService<ScopedToolsLike>(agent, "tools").restrict({ deny: denied }),
+            "workspace-scope:mcp-policy",
+          );
       active.mcpDispose = replacement;
       active.mcpKey = key;
-      dispose(previous);
 
       if (previous === undefined && replacement === undefined) return next();
-      signal.throwIfAborted();
       return systemPrompt.assemble(context);
     },
     { prepend: true },
@@ -116,6 +128,7 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
       if (active === undefined) {
         throw new Error("dsh-workspace-scope: workspace policy is not initialized");
       }
+      if (payload.agent.session.header.origin === "subagent" && active.config.subagents !== true) return next();
 
       await skillAccess(async () => {
         // Keep the previous shadow installed while queued. Once this Agent owns
@@ -124,14 +137,35 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
         payload.signal.throwIfAborted();
         const previous = active.skillDispose;
         delete active.skillDispose;
-        dispose(previous);
-        active.skillDispose = await installSkillPolicy(
-          skills,
-          tools,
-          payload.agent,
-          active.config,
-          payload.signal,
+        await dispose(previous);
+        payload.signal.throwIfAborted();
+        // DSH tool-skill uses ensure() before reading the catalog. Using get()
+        // here could snapshot a deleted directory while tool-skill recovers it.
+        // Do not silently fall back to the workspace root for a restricted child.
+        let childCwd: string | undefined;
+        if (payload.agent.session.header.origin === "subagent"
+          && active.config.mode !== "default"
+          && tools.get("skill", payload.agent) !== undefined) {
+          const workingDirectory = ctx.get("workingDirectory") as WorkingDirectoryLike | undefined;
+          if (workingDirectory === undefined) {
+            throw new Error("dsh-workspace-scope: subagent working directory service is unavailable");
+          }
+          childCwd = await workingDirectory.ensure(payload.agent, payload.signal);
+          payload.signal.throwIfAborted();
+        }
+        const replacement = ctx.effect(
+          async () => (await installSkillPolicy(
+            skills,
+            tools,
+            payload.agent,
+            active.config,
+            payload.signal,
+            childCwd,
+          )) ?? (() => {}),
+          "workspace-scope:skill-policy",
         );
+        await replacement;
+        active.skillDispose = replacement;
       });
       return next();
     },

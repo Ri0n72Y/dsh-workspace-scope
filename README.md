@@ -1,6 +1,6 @@
 # dsh-workspace-scope
 
-[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DSH compatibility](https://img.shields.io/badge/DSH%20tested%20only-0.1.6--alpha.2-f59e0b)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.6-alpha.2) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
+[![ci](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/Ri0n72Y/dsh-workspace-scope/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/dsh-workspace-scope)](https://www.npmjs.com/package/dsh-workspace-scope) [![DSH verified](https://img.shields.io/badge/DSH%20verified-0.2.1--rc.5-f59e0b)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.5) [![license](https://img.shields.io/github/license/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/blob/main/LICENSE) [![release](https://img.shields.io/github/v/release/Ri0n72Y/dsh-workspace-scope)](https://github.com/Ri0n72Y/dsh-workspace-scope/releases)
 
 为 DeepSeek Harness 按工作区启用或禁用当前 Agent 已拥有的 Skill 与 Host 全局 MCP。
 
@@ -9,7 +9,9 @@
 English: [README.en.md](README.en.md)
 
 > [!IMPORTANT]
-> `dsh-workspace-scope v0.5.3` **仅针对 DeepSeek Harness `0.1.6-alpha.2` 完成适配与实测**。这不是“`0.1.6-alpha.2` 及以上均兼容”的声明；后续 DSH 版本可能继续调整 Client / Host contract，升级 DSH 前请单独验证本插件兼容性。
+> **当前已验证支持的 DSH 版本：`0.2.1-rc.5`（Web）。** `dsh-workspace-scope v0.5.4` 已基于该版本完成依赖安装、类型检查、构建、测试与覆盖率验证。`engines.dsh >=0.2.1-rc.2` 是插件允许加载的版本范围，不代表范围内所有版本均已通过验证。Desktop `0.2.1-rc.5` 仍需完成打包应用中的安装、界面与策略实机测试。
+>
+> 后续完成新 DSH 版本的兼容性验证时，同步更新这里的已验证版本、页首徽章及发布记录；不提前宣称未验证版本受支持。
 
 ## 安装
 
@@ -25,6 +27,8 @@ dsh plugin --profile web add dsh-workspace-scope
 dsh plugin --profile web remove dsh-workspace-scope
 ```
 
+Desktop `0.2.1-rc.5` 请从侧栏 **插件** 页面安装 `dsh-workspace-scope`。Desktop 使用保留的 `desktop` profile，公开 CLI 不直接管理该 profile；插件管理器会使用 Desktop 自己的 profile 与 pnpm 安装链路。
+
 ## 使用
 
 在新建会话的空白 Session 中，点击输入卡右侧的「工作区能力」。
@@ -32,6 +36,8 @@ dsh plugin --profile web remove dsh-workspace-scope
 界面会显示当前 Agent 可由模型调用的 Skill，以及 Host 全局 MCP 服务器。切换 Agent Preset 后，列表会随当前 Agent 更新。开关、搜索、全部启用和全部禁用都会立即保存到工作区根目录的 `.dsh-scope.json`。
 
 配置在会话第一次真正发起模型请求时锁定。因此开始对话前的修改会应用到该会话；之后的修改只影响新的会话。
+
+默认只限制主对话，不限制子代理。勾选「子代理」后，根工作区的同一份策略也会限制子代理的 Skill 和 Host 全局 MCP。子代理仍从自己的有效工作目录发现 Skill；插件不读取子目录里的其他 `.dsh-scope.json`。当前管理界面只列出主 Agent 可发现的 Skill。若子代理工作目录中存在独有 Skill，它们不会出现在界面中，但仍受同一份白名单限制；需要放行时，可手动将 Skill 名称加入根目录 `.dsh-scope.json` 的 `default.skills`。
 
 ## 配置
 
@@ -42,7 +48,8 @@ dsh plugin --profile web remove dsh-workspace-scope
   "default": {
     "mode": "whitelist",
     "skills": ["<skill-name>"],
-    "mcps": ["<server-name>"]
+    "mcps": ["<server-name>"],
+    "subagents": false
   }
 }
 ```
@@ -52,6 +59,7 @@ dsh plugin --profile web remove dsh-workspace-scope
 - `blacklist`：禁用列表中的能力。
 - `skills`：Skill 名称。
 - `mcps`：Host 全局 MCP server 名称。
+- `subagents`：是否对子代理也应用 Workspace 限制；默认 `false`，旧配置无需修改。
 
 ## 边界
 

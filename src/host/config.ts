@@ -28,7 +28,7 @@ export function parseScopeConfig(text: string | undefined): ScopeConfig {
   if (typeof row !== "object" || row === null || Array.isArray(row)) {
     return defaultConfig();
   }
-  const value = row as { mode?: unknown; skills?: unknown; mcps?: unknown };
+  const value = row as { mode?: unknown; skills?: unknown; mcps?: unknown; subagents?: unknown };
   return {
     mode:
       value.mode === "whitelist" || value.mode === "blacklist"
@@ -40,6 +40,7 @@ export function parseScopeConfig(text: string | undefined): ScopeConfig {
     mcps: Array.isArray(value.mcps)
       ? value.mcps.filter((item): item is string => typeof item === "string")
       : [],
+    ...(value.subagents === true ? { subagents: true } : {}),
   };
 }
 

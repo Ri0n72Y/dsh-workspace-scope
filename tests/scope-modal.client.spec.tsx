@@ -154,6 +154,29 @@ describe('workspace-scope client', () => {
     })
   })
 
+  it('keeps subagent restrictions off by default and preserves opt-in on bulk actions', async () => {
+    const m = await mount()
+    m.renderModal(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
+    openDialog()
+    const optIn = await screen.findByRole('checkbox', { name: /子代理/ })
+    expect((optIn as HTMLInputElement).checked).toBe(false)
+
+    fireEvent.click(optIn)
+    expect((optIn as HTMLInputElement).checked).toBe(true)
+    await waitFor(() => {
+      const save = m.hostCall.mock.calls.find(([method]) => method === 'save')?.[1] as { subagents?: boolean }
+      expect(save?.subagents).toBe(true)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '全部禁用' }))
+    await waitFor(() => {
+      const saves = m.hostCall.mock.calls.filter(([method]) => method === 'save')
+      expect(saves).toHaveLength(2)
+      expect((saves[1]![1] as { subagents: boolean }).subagents).toBe(true)
+    })
+  })
+
   it('filters entries through the search box and updates counts', async () => {
     const m = await mount()
     m.renderModal(sessions('s1', true))
@@ -282,6 +305,42 @@ describe('workspace-scope client', () => {
     })
     fireEvent.click(screen.getAllByRole('switch')[0])
     await waitFor(() => expect(screen.getByText('保存失败：权限不足')).toBeTruthy())
+  })
+
+  it('submits rapid autosaves in interaction order', async () => {
+    let releaseFirst!: (value: { saved: boolean }) => void
+    let saveCalls = 0
+    const m = await mount((method: string) => {
+      if (method === 'overview') return Promise.resolve(makeOverview())
+      if (method === 'save') {
+        saveCalls += 1
+        if (saveCalls === 1) {
+          return new Promise<{ saved: boolean }>((resolve) => { releaseFirst = resolve })
+        }
+        return Promise.resolve({ saved: true })
+      }
+      return Promise.resolve({})
+    })
+    m.renderModal(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
+    openDialog()
+    await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(4))
+
+    fireEvent.click(screen.getByRole('button', { name: '全部禁用' }))
+    await waitFor(() => expect(saveCalls).toBe(1))
+    fireEvent.click(screen.getByRole('button', { name: '全部启用' }))
+    await Promise.resolve()
+    expect(saveCalls).toBe(1)
+
+    releaseFirst({ saved: true })
+    await waitFor(() => expect(saveCalls).toBe(2))
+    const saves = m.hostCall.mock.calls.filter(([method]) => method === 'save')
+    expect(saves[0]![1]).toMatchObject({ mode: 'whitelist', skills: [], mcps: [] })
+    expect(saves[1]![1]).toMatchObject({
+      mode: 'whitelist',
+      skills: ['skill-a', 'skill-b', 'skill-c'],
+      mcps: ['playwright'],
+    })
   })
 
   it('closes via Escape and via the backdrop, focusing the dialog on open', async () => {
