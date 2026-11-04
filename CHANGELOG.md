@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-11-04
+
 ### Added
 - Add an opt-in **子代理** checkbox (`default.subagents`, false by default). Workspace-level capability restrictions stay on root conversations unless enabled for subagents; opted-in subagents use their own effective working directory for Skill catalog lookup while retaining the root workspace configuration. Related to external PR #33.
 
