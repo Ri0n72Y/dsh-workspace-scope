@@ -6,6 +6,8 @@ dsh-workspace-scope is a Cordis plugin for DeepSeek Harness (DSH) that applies p
 
 Validated compatibility baseline: DSH `0.2.1-rc.5`. The package declares `engines.dsh >=0.2.1-rc.2`; DSH 0.2.1 compatibility preflight evaluates that host range before any DSH peer fallback, so later runtimes are admitted by default but are not individually field-tested. Read [docs/architecture.md](docs/architecture.md) before changing Skill or Tool integration; it records the upstream ownership and data-flow contracts used by 0.5.
 
+When a new DSH version has actually passed compatibility validation, update the verified-version badge and statement in both READMEs, the pinned DSH dependencies and lockfile, this compatibility baseline, the architecture baseline, and the changelog in the same change. Keep `engines.dsh` as the separate loading-range contract; do not represent its open-ended range as a tested support matrix.
+
 ## Common commands (workdir: dsh-workspace-scope/)
 
 - `pnpm run check`: typecheck + tsdown dual build (lib/index.js + lib/client.js)
