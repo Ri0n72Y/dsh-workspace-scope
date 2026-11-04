@@ -20,7 +20,7 @@ export interface WebServerLike {
 }
 
 export interface SessionLike {
-  header: { cwd: string };
+  header: { cwd?: string };
 }
 
 export interface SkillInvocationLike {
