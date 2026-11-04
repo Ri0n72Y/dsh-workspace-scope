@@ -13,6 +13,7 @@ import type {
   SkillsServiceLike,
   SystemPromptLike,
   ToolsServiceLike,
+  WorkingDirectoryLike,
 } from "./types.js";
 
 type PolicyDispose = () => void | Promise<void>;
@@ -84,6 +85,8 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
         activePolicies.set(agent.id, active);
       }
 
+      // The workspace file governs subagents only when explicitly enabled.
+      if (agent.session.header.origin === "subagent" && active.config.subagents !== true) return next();
       if (active.mcpFailure !== undefined) throw active.mcpFailure.error;
 
       const denied = deniedMcpTools(active.config, globalMcpToolsMap(tools));
@@ -125,6 +128,7 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
       if (active === undefined) {
         throw new Error("dsh-workspace-scope: workspace policy is not initialized");
       }
+      if (payload.agent.session.header.origin === "subagent" && active.config.subagents !== true) return next();
 
       await skillAccess(async () => {
         // Keep the previous shadow installed while queued. Once this Agent owns
@@ -135,6 +139,20 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
         delete active.skillDispose;
         await dispose(previous);
         payload.signal.throwIfAborted();
+        // DSH tool-skill uses ensure() before reading the catalog. Using get()
+        // here could snapshot a deleted directory while tool-skill recovers it.
+        // Do not silently fall back to the workspace root for a restricted child.
+        let childCwd: string | undefined;
+        if (payload.agent.session.header.origin === "subagent"
+          && active.config.mode !== "default"
+          && tools.get("skill", payload.agent) !== undefined) {
+          const workingDirectory = ctx.get("workingDirectory") as WorkingDirectoryLike | undefined;
+          if (workingDirectory === undefined) {
+            throw new Error("dsh-workspace-scope: subagent working directory service is unavailable");
+          }
+          childCwd = await workingDirectory.ensure(payload.agent, payload.signal);
+          payload.signal.throwIfAborted();
+        }
         const replacement = ctx.effect(
           async () => (await installSkillPolicy(
             skills,
@@ -142,6 +160,7 @@ export function registerRuntimePolicy(ctx: Context, deps: RuntimePolicyDeps): vo
             payload.agent,
             active.config,
             payload.signal,
+            childCwd,
           )) ?? (() => {}),
           "workspace-scope:skill-policy",
         );

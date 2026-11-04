@@ -7,6 +7,7 @@ export interface ScopeConfig {
   mode: ScopeMode;
   skills: string[];
   mcps: string[];
+  subagents?: boolean;
 }
 
 export interface Route {
@@ -20,7 +21,7 @@ export interface WebServerLike {
 }
 
 export interface SessionLike {
-  header: { cwd?: string };
+  header: { cwd?: string; origin?: string };
 }
 
 export interface SkillInvocationLike {
@@ -97,6 +98,10 @@ export interface FsServiceLike {
     signal?: unknown,
     sandboxPolicy?: unknown,
   ): Promise<unknown>;
+}
+
+export interface WorkingDirectoryLike {
+  ensure(agent: AgentLike, signal: AbortSignal): Promise<string>;
 }
 
 export interface ConfigStore {

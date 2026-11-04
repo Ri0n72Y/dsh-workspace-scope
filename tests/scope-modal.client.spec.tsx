@@ -154,6 +154,29 @@ describe('workspace-scope client', () => {
     })
   })
 
+  it('keeps subagent restrictions off by default and preserves opt-in on bulk actions', async () => {
+    const m = await mount()
+    m.renderModal(sessions('s1', true))
+    m.renderEntry(sessions('s1', true))
+    openDialog()
+    const optIn = await screen.findByRole('checkbox', { name: /子代理/ })
+    expect((optIn as HTMLInputElement).checked).toBe(false)
+
+    fireEvent.click(optIn)
+    expect((optIn as HTMLInputElement).checked).toBe(true)
+    await waitFor(() => {
+      const save = m.hostCall.mock.calls.find(([method]) => method === 'save')?.[1] as { subagents?: boolean }
+      expect(save?.subagents).toBe(true)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '全部禁用' }))
+    await waitFor(() => {
+      const saves = m.hostCall.mock.calls.filter(([method]) => method === 'save')
+      expect(saves).toHaveLength(2)
+      expect((saves[1]![1] as { subagents: boolean }).subagents).toBe(true)
+    })
+  })
+
   it('filters entries through the search box and updates counts', async () => {
     const m = await mount()
     m.renderModal(sessions('s1', true))

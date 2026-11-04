@@ -4,9 +4,12 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Added
+- Add an opt-in **子代理** checkbox (`default.subagents`, false by default). Workspace-level capability restrictions stay on root conversations unless enabled for subagents; opted-in subagents use their own effective working directory for Skill catalog lookup while retaining the root workspace configuration. Related to external PR #33.
+
 ### Changed
-- Use DeepSeek Harness `0.2.1-rc.2` as the validated baseline while allowing later DSH runtimes by default through `engines.dsh >=0.2.1-rc.2`; concrete Client contract/type dependencies remain pinned to `0.2.1-rc.2` for reproducible builds, and the development baseline follows Cordis `4.0.5`.
-- Document Desktop `0.2.1-rc.2` compatibility boundaries: Desktop loads external plugins from its reserved profile and reuses the shared Web application/Host path, so no Electron-specific plugin surface is required; packaged-Desktop smoke remains the final field verification step.
+- Validate against DeepSeek Harness `0.2.1-rc.5`, pin the concrete Client contract/type dependencies to `0.2.1-rc.5`, and retain `engines.dsh >=0.2.1-rc.2` for backward-compatible loading. Cordis remains at `4.0.5`; packaged-Desktop testing is still pending.
+- Document Desktop `0.2.1-rc.5` compatibility boundaries: Desktop loads external plugins from its reserved profile and reuses the shared Web application/Host path, so no Electron-specific plugin surface is required; packaged-Desktop smoke remains the final field verification step.
 
 ### Fixed
 - Adopt Agent-scoped Skill and Tool policy registrations into plugin-owned Cordis effects, and propagate reconciliation cleanup failures so stale shadows or restrictions cannot be silently retained across reloads or policy replacement.
